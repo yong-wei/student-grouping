@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/CAlogo32.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/CAlogo64.png" />
+    <link rel="apple-touch-icon" href="/CAlogo128.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      if (!('Promise' in window) || typeof window.Promise.resolve !== 'function') {
+        window.__PROMISE_POLYFILL_REQUESTED__ = true;
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js';
+        script.integrity = 'sha256-+8Zwx5e0sJVo9hw3rroWAt4EvsC0BpvyEukgqS0bKjc=';
+        script.crossOrigin = 'anonymous';
+        script.referrerPolicy = 'no-referrer';
+        script.onload = function () {
+          window.__PROMISE_POLYFILL_LOADED__ = true;
+        };
+        document.head.appendChild(script);
+      }
+    </script>
+    <title>智能学生分组助手</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
