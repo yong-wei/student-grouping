@@ -12,6 +12,7 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     passWithNoTests: false,
     forbidOnly: true,
+    exclude: ['node_modules', 'dist', '.idea', '.git', 'coverage', 'deployment/**'],
     reporters: 'default',
     coverage: {
       enabled: true,

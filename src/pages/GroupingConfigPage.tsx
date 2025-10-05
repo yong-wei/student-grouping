@@ -15,6 +15,7 @@ import {
   Col,
   Divider,
 } from 'antd';
+import type { TransferItem } from 'antd/es/transfer';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -25,13 +26,20 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
-import type { GroupingTask, GroupingTaskDraft } from '../types';
+import type { GroupingTask, GroupingTaskDraft, Student } from '../types';
 import { optimizeGrouping, balancedRandomGrouping } from '../utils/groupingAlgorithm';
+import type { SeedGroup } from '../utils/groupingAlgorithm';
 
 const { Title, Text } = Typography;
 
 interface TaskFormData extends GroupingTaskDraft {
   randomSelectCount?: number;
+}
+
+interface StudentTransferItem extends TransferItem {
+  name: string;
+  studentNumber: string;
+  locked: boolean;
 }
 
 const generateId = () => {
@@ -130,10 +138,50 @@ const GroupingConfigPage: React.FC = () => {
 
   const students = useMemo(() => uploadedData?.students ?? [], [uploadedData]);
 
-  const unassignedStudents = useMemo(
-    () => students.filter((student) => !student.groupNumber),
+  const fixedStudents = useMemo(
+    () =>
+      students.filter((student) => {
+        const { groupNumber } = student;
+        return (
+          typeof groupNumber === 'number' &&
+          Number.isFinite(groupNumber) &&
+          Number.isInteger(groupNumber) &&
+          groupNumber > 0
+        );
+      }),
     [students]
   );
+
+  const fixedStudentIds = useMemo(
+    () => new Set(fixedStudents.map((student) => student.id)),
+    [fixedStudents]
+  );
+
+  const fixedGroupMap = useMemo(() => {
+    const map = new Map<number, Student[]>();
+    fixedStudents.forEach((student) => {
+      const groupNumber = Number(student.groupNumber);
+      if (!Number.isInteger(groupNumber) || groupNumber <= 0) return;
+      const existing = map.get(groupNumber);
+      if (existing) {
+        existing.push(student);
+      } else {
+        map.set(groupNumber, [student]);
+      }
+    });
+    return map;
+  }, [fixedStudents]);
+
+  const highestFixedGroupNumber = useMemo(() => {
+    if (fixedStudents.length === 0) return 0;
+    return fixedStudents.reduce((max, student) => {
+      const value = Number(student.groupNumber ?? 0);
+      if (!Number.isFinite(value)) return max;
+      return value > max ? value : max;
+    }, 0);
+  }, [fixedStudents]);
+
+  const unassignedStudents = useMemo(() => students, [students]);
 
   const studentMap = useMemo(
     () => new Map(students.map((student) => [student.id, student])),
@@ -174,7 +222,10 @@ const GroupingConfigPage: React.FC = () => {
         item.studentIds.forEach((studentId) => selectedInOtherTasks.add(studentId))
       );
     const pool = unassignedStudents.filter(
-      (student) => !selectedInOtherTasks.has(student.id) && !task.studentIds.includes(student.id)
+      (student) =>
+        !selectedInOtherTasks.has(student.id) &&
+        !task.studentIds.includes(student.id) &&
+        !fixedStudentIds.has(student.id)
     );
     if (pool.length === 0) {
       message.warning('没有可供随机选择的学生');
@@ -190,42 +241,204 @@ const GroupingConfigPage: React.FC = () => {
     handleUpdateTask(id, { studentIds: uniqueIds });
   };
 
+  interface TaskExecutionPlan {
+    task: TaskFormData;
+    participantIds: string[];
+    flexibleStudents: Student[];
+    seedGroups: SeedGroup[];
+    range: { start: number; end: number };
+  }
+
   const handleStartGrouping = async () => {
     if (tasks.length === 0) {
       message.warning('请至少创建一个分组任务');
       return;
     }
 
-    const actionableTasks = tasks.filter((task) => task.studentIds.length > 0);
-    if (actionableTasks.length === 0) {
-      message.warning('请在至少一个分组任务中选择学生');
+    const taskEntries = tasks.map((task) => {
+      const taskStudents = task.studentIds
+        .map((id) => studentMap.get(id))
+        .filter((student): student is Student => Boolean(student));
+      return { task, students: taskStudents };
+    });
+
+    const executionPlans: TaskExecutionPlan[] = [];
+    const validationErrors: string[] = [];
+    const planMap = new Map<string, string[]>();
+
+    let groupCursor = 0;
+
+    taskEntries.forEach(({ task, students }) => {
+      const participantSet = new Set<string>();
+      students.forEach((student) => participantSet.add(student.id));
+
+      const startGroupNumber = groupCursor + 1;
+      let maxGroups =
+        participantSet.size > 0 ? Math.max(1, Math.ceil(participantSet.size / task.groupSize)) : 0;
+      let endGroupNumber = maxGroups > 0 ? startGroupNumber + maxGroups - 1 : startGroupNumber - 1;
+
+      let adjusted = true;
+      while (adjusted) {
+        adjusted = false;
+
+        if (maxGroups === 0) {
+          const lockedAtStart = fixedGroupMap.get(startGroupNumber);
+          if (lockedAtStart && lockedAtStart.length > 0) {
+            maxGroups = 1;
+            endGroupNumber = startGroupNumber;
+            adjusted = true;
+          } else {
+            break;
+          }
+        }
+
+        for (let groupNumber = startGroupNumber; groupNumber <= endGroupNumber; groupNumber += 1) {
+          const lockedMembers = fixedGroupMap.get(groupNumber);
+          if (!lockedMembers || lockedMembers.length === 0) continue;
+          lockedMembers.forEach((member) => {
+            if (!participantSet.has(member.id)) {
+              participantSet.add(member.id);
+              adjusted = true;
+            }
+          });
+        }
+
+        if (maxGroups > 0) {
+          const requiredGroups = Math.max(1, Math.ceil(participantSet.size / task.groupSize));
+          if (requiredGroups > maxGroups) {
+            maxGroups = requiredGroups;
+            endGroupNumber = startGroupNumber + maxGroups - 1;
+            adjusted = true;
+          }
+        }
+      }
+
+      if (maxGroups === 0) {
+        return;
+      }
+
+      const seedGroups: SeedGroup[] = [];
+      const lockedStudentIds = new Set<string>();
+      for (let groupNumber = startGroupNumber; groupNumber <= endGroupNumber; groupNumber += 1) {
+        const lockedMembers = fixedGroupMap.get(groupNumber) ?? [];
+        seedGroups.push({ groupNumber, lockedMembers });
+        lockedMembers.forEach((member) => lockedStudentIds.add(member.id));
+      }
+
+      const participantStudents = Array.from(participantSet)
+        .map((id) => studentMap.get(id))
+        .filter((student): student is Student => Boolean(student));
+
+      const participantIds = Array.from(new Set(participantStudents.map((student) => student.id)));
+
+      const flexibleStudents = participantStudents.filter(
+        (student) => !lockedStudentIds.has(student.id)
+      );
+
+      seedGroups.forEach((seed) => {
+        if (seed.lockedMembers.length > task.groupSize) {
+          validationErrors.push(
+            `分组 ${seed.groupNumber} 的固定学生数量 (${seed.lockedMembers.length}) 已超过设置的小组人数 ${task.groupSize}`
+          );
+        }
+      });
+
+      const totalCapacity = seedGroups.reduce(
+        (sum, seed) => sum + Math.max(task.groupSize - seed.lockedMembers.length, 0),
+        0
+      );
+      if (totalCapacity < flexibleStudents.length) {
+        validationErrors.push(`任务"${task.name}"中的剩余席位不足，请调整小组人数或固定分组`);
+      }
+
+      if (students.length > 0 && students.length < task.groupSize) {
+        message.warning(`任务"${task.name}"可用学生不足，请检查分组人数设置`);
+      }
+
+      executionPlans.push({
+        task,
+        participantIds,
+        flexibleStudents,
+        seedGroups,
+        range: { start: startGroupNumber, end: endGroupNumber },
+      });
+      planMap.set(task.id, participantIds);
+      groupCursor = endGroupNumber;
+    });
+
+    const assignedLockedIds = new Set<string>();
+    executionPlans.forEach((plan) => {
+      plan.seedGroups.forEach((seed) => {
+        seed.lockedMembers.forEach((member) => assignedLockedIds.add(member.id));
+      });
+    });
+
+    const missingFixedStudents = fixedStudents.filter(
+      (student) => !assignedLockedIds.has(student.id)
+    );
+    if (missingFixedStudents.length > 0) {
+      const preview = missingFixedStudents
+        .slice(0, 3)
+        .map((student) => student.name)
+        .join('、');
+      validationErrors.push(
+        `部分固定分组学生未被纳入任务：${preview}${
+          missingFixedStudents.length > 3 ? ' 等' : ''
+        }，请检查分组序号与任务配置`
+      );
+    }
+
+    if (highestFixedGroupNumber > groupCursor) {
+      validationErrors.push(
+        `存在固定分组序号 ${highestFixedGroupNumber} 超出当前配置支持的最大分组 ${groupCursor}，请调整任务容量或添加分组任务`
+      );
+    }
+
+    const actionablePlans = executionPlans.filter((plan) => plan.participantIds.length > 0);
+
+    if (validationErrors.length > 0) {
+      message.error({ content: validationErrors.join('；'), key: 'grouping' });
       return;
+    }
+
+    if (actionablePlans.length === 0) {
+      message.warning('请在至少一个分组任务中选择学生或提供固定分组');
+      return;
+    }
+
+    if (planMap.size > 0) {
+      setTasks((prev) =>
+        prev.map((item) => {
+          const updatedIds = planMap.get(item.id);
+          if (!updatedIds) return item;
+          const uniqueIds = Array.from(new Set(updatedIds));
+          if (
+            uniqueIds.length === item.studentIds.length &&
+            uniqueIds.every((id, idx) => id === item.studentIds[idx])
+          ) {
+            return item;
+          }
+          return { ...item, studentIds: uniqueIds };
+        })
+      );
     }
 
     try {
       message.loading({ content: '正在执行智能分组...', key: 'grouping' });
       const results: GroupingTask[] = [];
 
-      for (const task of actionableTasks) {
-        const students = uploadedData.students.filter((student) =>
-          task.studentIds.includes(student.id)
-        );
-
-        if (students.length === 0) continue;
-
-        if (students.length < task.groupSize) {
-          message.warning(`任务"${task.name}"可用学生不足，请检查分组人数设置`);
-        }
-
+      for (const plan of actionablePlans) {
+        const { task, flexibleStudents, seedGroups, participantIds } = plan;
+        const options = { seedGroups };
         const result =
           task.mode === 'balanced-random'
-            ? balancedRandomGrouping(students, task.groupSize)
-            : optimizeGrouping(students, task.groupSize, task.weights, 10000);
+            ? balancedRandomGrouping(flexibleStudents, task.groupSize, options)
+            : optimizeGrouping(flexibleStudents, task.groupSize, task.weights, 10000, options);
 
         results.push({
           id: `task-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
           name: task.name,
-          studentIds: task.studentIds,
+          studentIds: participantIds,
           groupSize: task.groupSize,
           mode: task.mode,
           weights: task.weights,
@@ -252,6 +465,15 @@ const GroupingConfigPage: React.FC = () => {
     navigate('/upload');
   };
 
+  const toggleTaskPanel = (id: string) => {
+    setActiveKey((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((key) => key !== id);
+      }
+      return [id];
+    });
+  };
+
   const renderTaskCard = (task: TaskFormData) => {
     const selectedInOtherTasks = new Set<string>();
     tasks
@@ -271,14 +493,36 @@ const GroupingConfigPage: React.FC = () => {
       .map((id) => studentMap.get(id))
       .filter((student): student is NonNullable<typeof student> => Boolean(student));
     const transferStudents = [...dataSourceStudents, ...missingSelectedStudents];
-    const transferData = transferStudents.map((student) => ({
-      key: student.id,
-      title: `${student.name} (${student.studentNumber})${
+    const transferData: StudentTransferItem[] = transferStudents.map((student) => {
+      const locked = fixedStudentIds.has(student.id);
+      const studentNumber = student.studentNumber ?? '';
+      const baseTitle = `${student.name} (${studentNumber})${
         student.ilsCompleted ? '' : ' · 未完成 ILS'
-      }`,
-    }));
+      }`;
+      const title = locked ? `${baseTitle} · 固定分组` : baseTitle;
+      return {
+        key: student.id,
+        title,
+        name: student.name,
+        studentNumber,
+        locked,
+        disabled: locked,
+      };
+    });
+
+    const filterOption = (inputValue: string, item: StudentTransferItem) => {
+      const keyword = inputValue.trim().toLowerCase();
+      if (!keyword) return true;
+      return (
+        item.name.toLowerCase().includes(keyword) ||
+        item.studentNumber.toLowerCase().includes(keyword)
+      );
+    };
     const randomPool = unassignedStudents.filter(
-      (student) => !selectedInOtherTasks.has(student.id) && !task.studentIds.includes(student.id)
+      (student) =>
+        !selectedInOtherTasks.has(student.id) &&
+        !task.studentIds.includes(student.id) &&
+        !fixedStudentIds.has(student.id)
     );
     const isActive = activeKey.includes(task.id);
 
@@ -331,9 +575,9 @@ const GroupingConfigPage: React.FC = () => {
               </Form.Item>
 
               <Form.Item label={`选择学生 (可用: ${randomPool.length})`}>
-                <Transfer
+                <Transfer<StudentTransferItem>
                   dataSource={transferData}
-                  targetKeys={task.studentIds}
+                  targetKeys={Array.from(new Set(task.studentIds))}
                   onChange={(targetKeys) =>
                     handleUpdateTask(task.id, {
                       studentIds: Array.from(new Set(targetKeys as string[])),
@@ -342,6 +586,8 @@ const GroupingConfigPage: React.FC = () => {
                   render={(item) => item.title}
                   titles={['可选学生', '已选学生']}
                   listStyle={{ width: 280, height: 320 }}
+                  showSearch
+                  filterOption={filterOption}
                 />
               </Form.Item>
 

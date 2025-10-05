@@ -4,7 +4,9 @@ import {
   calculateGroupStatistics,
   calculateGroupingQualityScore,
   optimizeGrouping,
+  balancedRandomGrouping,
 } from '../utils/groupingAlgorithm';
+import type { SeedGroup } from '../utils/groupingAlgorithm';
 import type { Student, GroupingWeights } from '../types';
 
 describe('Grouping Algorithm', () => {
@@ -104,6 +106,82 @@ describe('Grouping Algorithm', () => {
       expect(result.qualityScore).toBeGreaterThan(0);
       expect(result.statistics.totalStudents).toBe(24);
       expect(result.statistics.totalGroups).toBe(4);
+    });
+
+    it('should keep locked members in their assigned groups when using seeds', () => {
+      const weights: GroupingWeights = {
+        gender: 20,
+        major: 20,
+        activeScore: 20,
+        leader: 20,
+        intraStyleDiversity: 10,
+        interStyleSimilarity: 10,
+      };
+
+      const seedGroups: SeedGroup[] = [
+        { groupNumber: 1, lockedMembers: [mockStudents[0], mockStudents[1]] },
+        { groupNumber: 2, lockedMembers: [mockStudents[2]] },
+        { groupNumber: 3, lockedMembers: [] },
+        { groupNumber: 4, lockedMembers: [] },
+      ];
+
+      const freeStudents = mockStudents.filter((_, index) => index > 2);
+
+      const result = optimizeGrouping(freeStudents, 6, weights, 500, { seedGroups });
+
+      expect(result.groups).toHaveLength(seedGroups.length);
+      const groupOne = result.groups.find((group) => group.groupNumber === 1);
+      expect(groupOne?.members).toEqual(expect.arrayContaining(seedGroups[0].lockedMembers));
+      const otherGroups = result.groups.filter((group) => group.groupNumber !== 1);
+      otherGroups.forEach((group) => {
+        seedGroups[0].lockedMembers.forEach((student) => {
+          expect(group.members.some((member) => member.id === student.id)).toBe(false);
+        });
+      });
+    });
+
+    it('should handle scenarios with only locked members', () => {
+      const weights: GroupingWeights = {
+        gender: 20,
+        major: 20,
+        activeScore: 20,
+        leader: 20,
+        intraStyleDiversity: 10,
+        interStyleSimilarity: 10,
+      };
+
+      const seedGroups: SeedGroup[] = [
+        { groupNumber: 1, lockedMembers: mockStudents.slice(0, 6) },
+        { groupNumber: 2, lockedMembers: mockStudents.slice(6, 12) },
+      ];
+
+      const result = optimizeGrouping([], 6, weights, 200, { seedGroups });
+
+      expect(result.groups).toHaveLength(seedGroups.length);
+      seedGroups.forEach((seed) => {
+        const group = result.groups.find((item) => item.groupNumber === seed.groupNumber);
+        expect(group).toBeDefined();
+        expect(group?.members).toHaveLength(seed.lockedMembers.length);
+        expect(group?.members).toEqual(expect.arrayContaining(seed.lockedMembers));
+      });
+    });
+
+    it('should keep locked members when using seeds with balanced random grouping', () => {
+      const seedGroups: SeedGroup[] = [
+        { groupNumber: 1, lockedMembers: [mockStudents[0]] },
+        { groupNumber: 2, lockedMembers: [] },
+        { groupNumber: 3, lockedMembers: [] },
+        { groupNumber: 4, lockedMembers: [] },
+      ];
+
+      const freeStudents = mockStudents.slice(1);
+
+      const result = balancedRandomGrouping(freeStudents, 6, { seedGroups });
+
+      expect(result.groups).toHaveLength(seedGroups.length);
+      const firstGroup = result.groups.find((group) => group.groupNumber === 1);
+      expect(firstGroup).toBeDefined();
+      expect(firstGroup?.members.some((member) => member.id === mockStudents[0].id)).toBe(true);
     });
   });
 });
