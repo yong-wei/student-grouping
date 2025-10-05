@@ -25,3 +25,4 @@ student-group-ref/
 *.sln
 *.sw?
 
+deployment/
