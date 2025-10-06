@@ -1,38 +1,6 @@
 import type { Student, LearningStyle } from '../types';
 
 /**
- * 归一化数值到 [0, 1] 范围
- */
-export function normalizeValue(value: number, min: number, max: number): number {
-  if (max === min) return 0.5;
-  return (value - min) / (max - min);
-}
-
-/**
- * 归一化学生数据（性别、组长、排名、专业、总分）
- */
-export function normalizeStudentData(students: Student[]): Student[] {
-  // 提取数值范围
-  const rankings = students.map((s) => s.ranking);
-  const majors = students.map((s) => s.major);
-  const scores = students.map((s) => s.totalScore);
-
-  const minRanking = Math.min(...rankings);
-  const maxRanking = Math.max(...rankings);
-  const minMajor = Math.min(...majors);
-  const maxMajor = Math.max(...majors);
-  const minScore = Math.min(...scores);
-  const maxScore = Math.max(...scores);
-
-  return students.map((student) => ({
-    ...student,
-    ranking: normalizeValue(student.ranking, minRanking, maxRanking),
-    major: normalizeValue(student.major, minMajor, maxMajor),
-    totalScore: normalizeValue(student.totalScore, minScore, maxScore),
-  }));
-}
-
-/**
  * 计算学习风格向量（4维）
  */
 export function getLearningStyleVector(learningStyle: LearningStyle): number[] {
@@ -138,13 +106,6 @@ export function calculateLearningStyleFromILS(answers: (number | null)[]): Learn
     return 0;
   });
 
-  const dimensionDefinitions = [
-    { diffKey: 'activeReflective', positiveKey: 'active', negativeKey: 'reflective' },
-    { diffKey: 'sensingIntuitive', positiveKey: 'sensing', negativeKey: 'intuitive' },
-    { diffKey: 'visualVerbal', positiveKey: 'visual', negativeKey: 'verbal' },
-    { diffKey: 'sequentialGlobal', positiveKey: 'sequential', negativeKey: 'global' },
-  ] as const;
-
   const learningStyle: LearningStyle = {
     activeReflective: 0,
     sensingIntuitive: 0,
@@ -160,18 +121,38 @@ export function calculateLearningStyleFromILS(answers: (number | null)[]): Learn
     global: 0,
   };
 
-  dimensionDefinitions.forEach((definition, dimensionIndex) => {
+  for (let dimensionIndex = 0; dimensionIndex < 4; dimensionIndex += 1) {
     const indices = Array.from({ length: 11 }, (_, i) => i * 4 + dimensionIndex);
     const dimensionAnswers = indices.map((idx) => processedAnswers[idx]);
-    const sum = dimensionAnswers.reduce((total, value) => total + value, 0);
+    const sum = dimensionAnswers.reduce<number>((total, value) => total + value, 0);
     const positiveCount = dimensionAnswers.filter((value) => value === 1).length;
     const negativeCount = dimensionAnswers.filter((value) => value === -1).length;
 
-    // 与 MATLAB 脚本保持方向一致：更多选择2（-1）时分数为正
-    (learningStyle as Record<string, number>)[definition.diffKey] = -sum;
-    (learningStyle as Record<string, number>)[definition.positiveKey] = positiveCount;
-    (learningStyle as Record<string, number>)[definition.negativeKey] = negativeCount;
-  });
+    switch (dimensionIndex) {
+      case 0:
+        learningStyle.activeReflective = -sum;
+        learningStyle.active = positiveCount;
+        learningStyle.reflective = negativeCount;
+        break;
+      case 1:
+        learningStyle.sensingIntuitive = -sum;
+        learningStyle.sensing = positiveCount;
+        learningStyle.intuitive = negativeCount;
+        break;
+      case 2:
+        learningStyle.visualVerbal = -sum;
+        learningStyle.visual = positiveCount;
+        learningStyle.verbal = negativeCount;
+        break;
+      case 3:
+        learningStyle.sequentialGlobal = -sum;
+        learningStyle.sequential = positiveCount;
+        learningStyle.global = negativeCount;
+        break;
+      default:
+        break;
+    }
+  }
 
   return learningStyle;
 }

@@ -24,5 +24,6 @@ student-group-ref/
 *.njsproj
 *.sln
 *.sw?
-
-deployment/
+deployment
+deployment/*
+.claude

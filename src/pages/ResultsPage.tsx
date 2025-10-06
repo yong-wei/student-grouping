@@ -188,6 +188,7 @@ const ResultsPage: React.FC = () => {
 
       message.success('批量报告导出成功');
     } catch (error) {
+      console.error('批量导出失败', error);
       message.error(`导出失败: ${error}`);
     } finally {
       setExportingZip(false);

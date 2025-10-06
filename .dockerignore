@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.gitignore
+.vscode
+coverage
+logs
+student-group-ref
+deployment/student-group-ui.tar

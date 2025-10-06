@@ -583,7 +583,7 @@ const GroupingConfigPage: React.FC = () => {
                       studentIds: Array.from(new Set(targetKeys as string[])),
                     })
                   }
-                  render={(item) => item.title}
+                  render={(item) => item.title ?? ''}
                   titles={['可选学生', '已选学生']}
                   listStyle={{ width: 280, height: 320 }}
                   showSearch

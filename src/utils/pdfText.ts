@@ -12,8 +12,8 @@ export function addIndentedParagraph(
   const pageHeight = pdf.internal.pageSize.getHeight();
   const indentString = '　'.repeat(Math.max(0, indent));
   const indentWidth = pdf.getTextWidth(indentString);
-  const lines = pdf.splitTextToSize(text, maxWidth - indentWidth);
-  lines.forEach((line, index) => {
+  const lines = pdf.splitTextToSize(text, maxWidth - indentWidth) as string[];
+  lines.forEach((line: string, index) => {
     if (y + lineHeight > pageHeight - 20) {
       pdf.addPage();
       y = 20;

@@ -15,7 +15,10 @@ export async function generateBatchReports(
   tasks: GroupingTask[],
   onProgress?: (current: number, total: number) => void
 ): Promise<void> {
-  const tasksWithResult = tasks.filter((task) => task.result && task.result.groups.length > 0);
+  const tasksWithResult = tasks.filter(
+    (task): task is GroupingTask & { result: NonNullable<GroupingTask['result']> } =>
+      Boolean(task.result && task.result.groups.length > 0)
+  );
   if (tasksWithResult.length === 0) {
     throw new Error('没有分组结果');
   }
@@ -45,6 +48,9 @@ export async function generateBatchReports(
     // 更新进度
     if (onProgress) {
       onProgress(i + 1, total);
+      if ((i + 1) % 5 === 0 || i + 1 === total) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
   }
 

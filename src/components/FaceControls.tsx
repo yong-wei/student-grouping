@@ -1,7 +1,6 @@
 import React from 'react';
 import { Card, Checkbox, Button, Slider, Space, Switch, Typography } from 'antd';
 import { DownOutlined } from '@ant-design/icons';
-import type { CheckboxValueType } from 'antd/es/checkbox/Group';
 import type { FaceFeature } from '../types';
 import { useAppStore } from '../store';
 
@@ -40,7 +39,7 @@ const FaceControls: React.FC = () => {
     .filter(([, enabled]) => enabled)
     .map(([key]) => key as FaceFeature);
 
-  const handleFeatureChange = (values: CheckboxValueType[]) => {
+  const handleFeatureChange = (values: (string | number)[]) => {
     const updated: Record<FaceFeature, boolean> = {
       faceSize: false,
       mouth: false,

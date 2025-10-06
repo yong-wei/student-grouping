@@ -60,9 +60,9 @@ function addParagraph(
   pdf.setFont(FONT_FAMILY, fontVariant);
   pdf.setFontSize(fontSize);
   if (fontStyle === 'bold' || indent === 0) {
-    const lines = pdf.splitTextToSize(text, maxWidth);
+    const lines = pdf.splitTextToSize(text, maxWidth) as string[];
     const pageHeight = pdf.internal.pageSize.getHeight();
-    lines.forEach((line) => {
+    lines.forEach((line: string) => {
       if (y + lineHeight > pageHeight - PAGE_MARGIN) {
         pdf.addPage();
         y = PAGE_MARGIN;
@@ -126,7 +126,7 @@ interface FaceRenderOptions {
 
 async function addGroupSection(
   pdf: jsPDF,
-  group: GroupingTask['result']['groups'][number],
+  group: NonNullable<GroupingTask['result']>['groups'][number],
   startY: number,
   faceOptions: FaceRenderOptions,
   displayNumber: number,
@@ -144,7 +144,7 @@ async function addGroupSection(
     `平均学习风格强度：${group.statistics.averageScore.toFixed(2)} | 专业数：${group.statistics.majorDiversity}`,
     `来源分组任务：${taskName}`,
   ];
-  const memberLines = group.members.map((member) => {
+  const memberLines = group.members.map((member: Student) => {
     const leaderTag = member.isLeader ? ' · 组长候选' : '';
     return `• ${member.name}（${member.studentNumber}）${leaderTag}`;
   });
@@ -194,7 +194,7 @@ async function addGroupSection(
   pdf.addImage(chartUrl, 'PNG', PAGE_MARGIN, chartY, chartWidth, chartHeight);
 
   let textY = chartY;
-  wrappedLines.forEach((line) => {
+  wrappedLines.forEach((line: string) => {
     pdf.text(line, PAGE_MARGIN + chartWidth + 10, textY);
     textY += LINE_HEIGHT;
   });
@@ -203,7 +203,7 @@ async function addGroupSection(
 
   if (memberCount > 0) {
     const radarImages = await Promise.all(
-      group.members.map((member) => {
+      group.members.map((member: Student) => {
         const color = member.gender === 1 ? '#1890ff' : member.gender === 0 ? '#fa8c16' : '#8c8c8c';
         const pixelSize = Math.max(110, Math.round(radarSize * 3.5));
         return renderStudentRadar(member, {
@@ -287,7 +287,7 @@ async function addGroupSection(
       memberCount * radarSize + (memberCount > 1 ? (memberCount - 1) * radarGap : 0);
     const rowStartX = PAGE_MARGIN + (usableWidth - totalRowWidth) / 2;
 
-    radarImages.forEach((image, idx) => {
+    radarImages.forEach((image: string, idx: number) => {
       const x = rowStartX + idx * (radarSize + radarGap);
       pdf.addImage(image, 'PNG', x, gridY, radarSize, radarSize, undefined, 'FAST');
     });
@@ -296,7 +296,7 @@ async function addGroupSection(
 
     if (faceOptions.includeFaces && faceSize > 0) {
       const faceCenterY = gridY + faceSize / 2;
-      group.members.forEach((member, idx) => {
+      group.members.forEach((member: Student, idx: number) => {
         const centerX = rowStartX + idx * (radarSize + radarGap) + radarSize / 2;
         drawFace(member, centerX, faceCenterY);
       });
@@ -306,7 +306,7 @@ async function addGroupSection(
     const nameY = gridY + 1.8;
     pdf.setFont(FONT_FAMILY, 'normal');
     pdf.setFontSize(9);
-    group.members.forEach((member, idx) => {
+    group.members.forEach((member: Student, idx: number) => {
       const centerX = rowStartX + idx * (radarSize + radarGap) + radarSize / 2;
       pdf.text(member.name, centerX, nameY, { align: 'center' });
     });
@@ -387,7 +387,10 @@ export async function generateClassAnalysisReport(
     rankingRange?: { min: number; max: number } | null;
   }
 ): Promise<void> {
-  const tasksWithResult = tasks.filter((task) => task.result && task.result.groups.length > 0);
+  const tasksWithResult = tasks.filter(
+    (task): task is GroupingTask & { result: NonNullable<GroupingTask['result']> } =>
+      Boolean(task.result && task.result.groups.length > 0)
+  );
   if (tasksWithResult.length === 0) {
     throw new Error('没有分组结果');
   }
@@ -457,7 +460,7 @@ export async function generateClassAnalysisReport(
   ];
 
   tasksWithResult.forEach((task) => {
-    const { statistics, qualityScore } = task.result!;
+    const { statistics, qualityScore } = task.result;
     overviewLines.push(
       `• ${task.name}：${statistics.totalGroups} 组，平均每组 ${statistics.averageGroupSize.toFixed(
         1
@@ -739,7 +742,7 @@ export async function generateIndividualReport(
     infoY += LINE_HEIGHT;
   });
   infoY += 2;
-  introWrapped.forEach((line, index) => {
+  introWrapped.forEach((line: string, index) => {
     const indent = index === 0 ? pdf.getTextWidth('  ') : 0;
     if (infoY + LINE_HEIGHT > y + blockHeight - 2) {
       return;

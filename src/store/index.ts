@@ -101,7 +101,7 @@ export const useAppStore = create<AppState>((set) => ({
   setFaceEnabled: (enabled) =>
     set((state) => {
       if (state.faceSettings.enabled === enabled) {
-        return undefined;
+        return {};
       }
       return {
         faceSettings: {
@@ -117,7 +117,7 @@ export const useAppStore = create<AppState>((set) => ({
         (key) => current[key] !== features[key]
       );
       if (!changed) {
-        return undefined;
+        return {};
       }
       return {
         faceSettings: {
@@ -131,7 +131,7 @@ export const useAppStore = create<AppState>((set) => ({
       const clamped = Math.min(Math.max(value, 0), 1);
       const current = state.faceSettings.exaggerations[feature];
       if (Math.abs(current - clamped) < 0.001) {
-        return undefined;
+        return {};
       }
       const nextRange = exaggerationToRange(clamped);
       return {

@@ -204,11 +204,19 @@ export function calculateGroupingQualityScore(groups: Group[], weights: Grouping
 
   // 6. 组间学习风格同质性分（各组平均风格向量与总体中心的距离方差越小越好）
   const groupAvgStyles = groups.map((g) => g.statistics.averageLearningStyle);
-  const overallAvgStyle = groupAvgStyles.reduce(
-    (acc, style) => acc.map((val, i) => val + style[i]),
-    [0, 0, 0, 0]
-  );
-  const centerStyle = overallAvgStyle.map((val) => val / groups.length);
+  const overallAvgStyle: [number, number, number, number] = [0, 0, 0, 0];
+  groupAvgStyles.forEach((style) => {
+    overallAvgStyle[0] += style[0];
+    overallAvgStyle[1] += style[1];
+    overallAvgStyle[2] += style[2];
+    overallAvgStyle[3] += style[3];
+  });
+  const centerStyle = overallAvgStyle.map((val) => val / groups.length) as [
+    number,
+    number,
+    number,
+    number,
+  ];
 
   const distances = groupAvgStyles.map((style) => calculateVectorDistance(style, centerStyle));
   const interVariance = calculateVariance(distances);
