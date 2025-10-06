@@ -3,6 +3,7 @@ import {
   validateStudentData,
   calculateDataStatistics,
   matchStudentsWithPhotos,
+  parsePhotoFiles,
 } from '../utils/excelParser';
 import type { Student } from '../types';
 
@@ -100,23 +101,45 @@ describe('Excel Parser Utils', () => {
   });
 
   describe('matchStudentsWithPhotos', () => {
-    it('should match students with photos by student number', () => {
-      const photoMap = new Map([['2023001', 'photo1.jpg']]);
+    it('should match students only when serial number and name both align', () => {
+      const photoMap = new Map([['1::张三', 'photo1.jpg']]);
       const result = matchStudentsWithPhotos(mockStudents, photoMap);
       expect(result[0].photo).toBe('photo1.jpg');
       expect(result[1].photo).toBeUndefined();
     });
 
-    it('should match students with photos by name', () => {
-      const photoMap = new Map([['张三', 'photo1.jpg']]);
+    it('should ignore photos when serial matches but name differs', () => {
+      const photoMap = new Map([['1::李四', 'photo-mismatch.jpg']]);
       const result = matchStudentsWithPhotos(mockStudents, photoMap);
-      expect(result[0].photo).toBe('photo1.jpg');
+      expect(result[0].photo).toBeUndefined();
+      expect(result[1].photo).toBeUndefined();
     });
 
-    it('should match students with photos by serial number', () => {
-      const photoMap = new Map([['1', 'photo-serial.jpg']]);
-      const result = matchStudentsWithPhotos(mockStudents, photoMap);
-      expect(result[0].photo).toBe('photo-serial.jpg');
+    it('should normalize whitespace in names before matching', () => {
+      const students = [
+        mockStudents[0],
+        {
+          ...mockStudents[1],
+          name: ' 李 四 ',
+        },
+      ];
+      const photoMap = new Map([['2::李四', 'photo2.jpg']]);
+      const result = matchStudentsWithPhotos(students, photoMap);
+      expect(result[1].photo).toBe('photo2.jpg');
+    });
+  });
+
+  describe('parsePhotoFiles', () => {
+    it('should create composite keys from filenames containing serial and name', async () => {
+      const file = new File(['dummy'], '序号1_张三.jpg', { type: 'image/jpeg' });
+      const photoMap = await parsePhotoFiles([file]);
+      expect(photoMap.get('1::张三')).toBeDefined();
+    });
+
+    it('should handle filenames with multiple segments and pick the correct student name', async () => {
+      const file = new File(['dummy'], '1-三年级二班-张三.png', { type: 'image/png' });
+      const photoMap = await parsePhotoFiles([file]);
+      expect(photoMap.get('1::张三')).toBeDefined();
     });
   });
 });

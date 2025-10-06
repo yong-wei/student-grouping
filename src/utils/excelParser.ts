@@ -19,6 +19,51 @@ const createEmptyLearningStyle = (): LearningStyle => ({
 
 const ILS_COLUMN_PREFIX = 'ILS';
 const ILS_QUESTION_COUNT = 44;
+const PHOTO_KEY_SEPARATOR = '::';
+
+const normalizeSerialKey = (input: string | number | undefined | null): string | undefined => {
+  if (input === null || input === undefined) {
+    return undefined;
+  }
+
+  if (typeof input === 'number' && Number.isFinite(input)) {
+    return String(Math.trunc(input));
+  }
+
+  const trimmed = String(input).trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const serialMatch = trimmed.match(/\d+/u);
+  if (!serialMatch) {
+    return undefined;
+  }
+
+  return String(Number(serialMatch[0]));
+};
+
+const normalizeNameKey = (input: string | undefined | null): string | undefined => {
+  if (input === null || input === undefined) {
+    return undefined;
+  }
+
+  const trimmed = String(input).trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const compact = trimmed
+    .replace(/[\s\u3000]+/gu, '')
+    .replace(/[·•]/gu, '')
+    .toLowerCase();
+
+  return compact || undefined;
+};
+
+const createPhotoCompositeKey = (serial: string, name: string): string => {
+  return `${serial}${PHOTO_KEY_SEPARATOR}${name}`;
+};
 
 /**
  * 解析 Excel 文件并提取学生数据
@@ -162,52 +207,108 @@ export async function parseExcelFile(file: File): Promise<Student[]> {
 export async function parsePhotoFiles(files: File[]): Promise<Map<string, string>> {
   const photoMap = new Map<string, string>();
 
-  const addEntry = (key: string | undefined | null, value: string) => {
-    if (!key) return;
-    const trimmed = key.trim();
-    if (!trimmed) return;
-    photoMap.set(trimmed, value);
-    const compact = trimmed.replace(/\s+/g, '');
-    if (compact && compact !== trimmed) {
-      photoMap.set(compact, value);
-    }
-  };
-
   for (const file of files) {
     const fileName = file.name;
     const baseName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
-    const objectUrl = URL.createObjectURL(file);
 
-    // 原始文件名（去除扩展名）
-    addEntry(baseName, objectUrl);
+    const objectUrl =
+      typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+        ? URL.createObjectURL(file)
+        : fileName;
+
+    const serialCandidates = new Set<string>();
+    const nameCandidates = new Set<string>();
+
+    const registerSerial = (value: string | number | undefined | null) => {
+      const normalized = normalizeSerialKey(value);
+      if (normalized) {
+        serialCandidates.add(normalized);
+      }
+    };
+
+    const registerName = (value: string | undefined | null) => {
+      const normalized = normalizeNameKey(value);
+      if (normalized) {
+        nameCandidates.add(normalized);
+      }
+    };
+
+    const registerPair = (serialValue: string | number | undefined | null, nameValue: string | undefined | null) => {
+      const serial = normalizeSerialKey(serialValue);
+      const name = normalizeNameKey(nameValue);
+      if (serial && name) {
+        serialCandidates.add(serial);
+        nameCandidates.add(name);
+      }
+    };
+
+    // 常见模式：序号紧跟姓名（例如“序号1_张三”或“1-张三”）
+    const prefixedPattern = baseName.match(/^序[号號]?(\d+)[-_]*(.+)$/u);
+    if (prefixedPattern) {
+      registerPair(prefixedPattern[1], prefixedPattern[2]);
+    }
+
+    const numericPrefixPattern = baseName.match(/^(\d+)[-_]+(.+)$/u);
+    if (numericPrefixPattern) {
+      registerPair(numericPrefixPattern[1], numericPrefixPattern[2]);
+    }
+
+    const tightPrefixPattern = baseName.match(/^(\d+)([A-Za-z\u4e00-\u9fa5·•\s]+)$/u);
+    if (tightPrefixPattern) {
+      registerPair(tightPrefixPattern[1], tightPrefixPattern[2]);
+    }
+
+    const suffixPattern = baseName.match(/^(.+)[-_]+序[号號]?(\d+)$/u);
+    if (suffixPattern) {
+      registerPair(suffixPattern[2], suffixPattern[1]);
+    }
 
     const segments = baseName
       .split(/[_-]/)
       .map((segment) => segment.trim())
       .filter(Boolean);
-    const serialSegmentIndex = segments.findIndex((segment) => /^序[号號]?\d+$/u.test(segment));
 
-    if (serialSegmentIndex !== -1) {
-      const serialSegment = segments[serialSegmentIndex];
-      const serialMatch = serialSegment.match(/\d+/u);
-      if (serialMatch) {
-        const serial = String(Number(serialMatch[0]));
-        addEntry(serial, objectUrl);
-        addEntry(`序号${serial}`, objectUrl);
+    segments.forEach((segment, index) => {
+      const serialOnlyMatch = segment.match(/^序[号號]?(\d+)$/u);
+      if (serialOnlyMatch) {
+        registerSerial(serialOnlyMatch[1]);
+        const next = segments[index + 1];
+        if (next) {
+          registerName(next);
+        }
+        return;
       }
 
-      const possibleName = segments[serialSegmentIndex + 1];
-      if (possibleName) {
-        addEntry(possibleName, objectUrl);
+      if (/^\d+$/u.test(segment)) {
+        registerSerial(segment);
+        const next = segments[index + 1];
+        if (next) {
+          registerName(next);
+        }
+        return;
       }
-    } else {
-      // 尝试从包含“序号X”模式的整段中提取
-      const serialPattern = baseName.match(/序[号號]?(\d+)/u);
-      if (serialPattern) {
-        const serial = String(Number(serialPattern[1]));
-        addEntry(serial, objectUrl);
-        addEntry(`序号${serial}`, objectUrl);
+
+      const combinedSerialPrefix = segment.match(/^序[号號]?(\d+)(.+)$/u);
+      if (combinedSerialPrefix) {
+        registerPair(combinedSerialPrefix[1], combinedSerialPrefix[2]);
+        return;
       }
+
+      const combinedNumericPrefix = segment.match(/^(\d+)(.+)$/u);
+      if (combinedNumericPrefix) {
+        registerPair(combinedNumericPrefix[1], combinedNumericPrefix[2]);
+        return;
+      }
+
+      registerName(segment);
+    });
+
+    if (serialCandidates.size > 0 && nameCandidates.size > 0) {
+      serialCandidates.forEach((serial) => {
+        nameCandidates.forEach((name) => {
+          photoMap.set(createPhotoCompositeKey(serial, name), objectUrl);
+        });
+      });
     }
   }
 
@@ -246,24 +347,14 @@ export function matchStudentsWithPhotos(
   photoMap: Map<string, string>
 ): Student[] {
   return students.map((student) => {
-    // 尝试用学号匹配
-    let photo = photoMap.get(student.studentNumber);
+    let photo: string | undefined;
 
-    // 如果学号没匹配上，尝试用姓名匹配
-    if (!photo) {
-      photo = photoMap.get(student.name);
-    }
+    const serialKey = normalizeSerialKey(student.serialNumber);
+    const nameKey = normalizeNameKey(student.name);
 
-    if (!photo) {
-      photo = photoMap.get(student.name?.replace(/\s+/g, ''));
-    }
-
-    if (!photo) {
-      photo = photoMap.get(String(student.serialNumber));
-    }
-
-    if (!photo) {
-      photo = photoMap.get(`序号${student.serialNumber}`);
+    if (serialKey && nameKey) {
+      const compositeKey = createPhotoCompositeKey(serialKey, nameKey);
+      photo = photoMap.get(compositeKey);
     }
 
     return {
