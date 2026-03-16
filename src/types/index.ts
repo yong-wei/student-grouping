@@ -6,9 +6,11 @@ export interface Student {
   name: string; // 姓名
   gender: number; // 性别 (0: 女, 1: 男)
   isLeader: boolean; // 是否组长候选人
-  ranking: number; // 排名
+  rankingPercent?: number; // 成绩排名百分比，数值越小越好
   major: string; // 专业
-  totalScore: number; // 总分
+  learningStyleIntensity: number; // 学习风格强度
+  initiativeScore: number; // 学习主动性总分
+  extroversionScore: number; // 外向程度得分
   learningStyles: LearningStyle; // 学习风格
   photo?: string; // 照片路径
   groupNumber?: number; // 分组序号
@@ -57,7 +59,9 @@ export interface GroupingTaskDraft {
 export interface GroupingWeights {
   gender: number; // 性别均衡度
   major: number; // 学科均衡度
-  activeScore: number; // 学习主动性均衡度
+  initiative: number; // 学习主动性均衡度
+  ranking: number; // 成绩均衡度
+  extroversion: number; // 外向程度均衡度
   leader: number; // 组长候选人分布
   intraStyleDiversity: number; // 组内学习风格异质性
   interStyleSimilarity: number; // 组间风格构成同质性
@@ -82,12 +86,25 @@ export interface Group {
 export interface GroupStatistics {
   genderBalance: number; // 男女比例
   leaderCount: number; // 组长候选人数量
-  averageScore: number; // 平均总分
-  averageRanking: number; // 平均排名
+  averageLearningStyleIntensity: number; // 平均学习风格强度
+  averageInitiativeScore: number; // 平均学习主动性总分
+  averageRankingPercent: number | null; // 平均成绩排名百分比
+  averageExtroversionScore: number; // 平均外向程度
+  rankingStudentCount: number; // 有成绩排名的学生数量
   majorDiversity: number; // 专业多样性
   averageLearningStyle: [number, number, number, number]; // 平均学习风格向量
   learningStyleDiversity: number; // 学习风格多样性
 }
+
+export type VisibleGroupStatistic =
+  | 'genderBalance'
+  | 'leaderCount'
+  | 'averageInitiativeScore'
+  | 'averageExtroversionScore'
+  | 'learningStyleDiversity'
+  | 'averageRankingPercent'
+  | 'averageLearningStyleIntensity'
+  | 'majorDiversity';
 
 // 分组统计信息
 export interface GroupingStatistics {
@@ -96,7 +113,9 @@ export interface GroupingStatistics {
   averageGroupSize: number;
   genderVariance: number;
   majorVariance: number;
-  scoreVariance: number;
+  initiativeVariance: number;
+  rankingVariance: number;
+  extroversionVariance: number;
   leaderDistribution: number;
 }
 

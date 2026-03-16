@@ -97,17 +97,28 @@ const DataUploadPage: React.FC = () => {
 
   // 下载导入模板
   const handleDownloadTemplate = () => {
-    const baseHeaders = ['序号', '姓名', '学号', '性别', '专业', '排名', '组长', '分组序号'];
+    const baseHeaders = [
+      '序号',
+      '姓名',
+      '学号',
+      '性别',
+      '专业',
+      '成绩排名百分比',
+      '学习主动性总分',
+      '外向程度',
+      '组长',
+      '分组序号',
+    ];
     const ilsHeaders = Array.from({ length: 44 }, (_, idx) => `ILS${idx + 1}`);
     const headers = [...baseHeaders, ...ilsHeaders];
 
-    const baseExample = [1, '张三', '20230001', 1, '大数据', 0.25, 1, ''];
+    const baseExample = [1, '张三', '20230001', 1, '大数据', 0.25, 63, 5, 1, ''];
     const ilsExample = Array.from({ length: 44 }, (_, idx) => (idx % 2 === 0 ? 1 : 2));
     const exampleRow = [...baseExample, ...ilsExample];
 
     const tipsRow = Array(headers.length).fill('');
     tipsRow[0] =
-      '填写说明：性别按男=1、女=0；组长填1表示愿意担任；分组序号用于固定自由组队成员，可留空；每道 ILS 题仅填写 1（选项A）或 2（选项B），若未作答请留空';
+      '填写说明：性别按男=1、女=0；成绩排名百分比数值越小成绩越好，缺失可留空；学习主动性总分与外向程度可直接填写；组长填1表示愿意担任；分组序号用于固定自由组队成员，可留空；每道 ILS 题仅填写 1（选项A）或 2（选项B），若未作答请留空';
 
     const worksheet = XLSX.utils.aoa_to_sheet([headers, exampleRow, tipsRow]);
     const workbook = XLSX.utils.book_new();
@@ -200,9 +211,16 @@ const DataUploadPage: React.FC = () => {
       width: 60,
       render: (isLeader: boolean) => (isLeader ? '是' : '否'),
     },
-    { title: '排名', dataIndex: 'ranking', key: 'ranking', width: 80 },
+    { title: '成绩排名%', dataIndex: 'rankingPercent', key: 'rankingPercent', width: 100 },
     { title: '专业', dataIndex: 'major', key: 'major', width: 80 },
-    { title: '总分', dataIndex: 'totalScore', key: 'totalScore', width: 80 },
+    { title: '主动性', dataIndex: 'initiativeScore', key: 'initiativeScore', width: 80 },
+    { title: '外向度', dataIndex: 'extroversionScore', key: 'extroversionScore', width: 80 },
+    {
+      title: '风格强度',
+      dataIndex: 'learningStyleIntensity',
+      key: 'learningStyleIntensity',
+      width: 90,
+    },
     {
       title: '积极/沉思',
       dataIndex: ['learningStyles', 'activeReflective'],

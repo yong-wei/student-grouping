@@ -1,9 +1,12 @@
 node_modules
-dist
 .git
 .gitignore
 .vscode
 coverage
 logs
 student-group-ref
-deployment/student-group-ui.tar
+deployment/build
+deployment/*.tar
+deployment/*.tar.gz
+deployment/*.manifest.env
+deployment/.DS_Store

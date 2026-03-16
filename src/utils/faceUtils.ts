@@ -50,10 +50,14 @@ export const computeFaceMetrics = (
   const global = (vector[3] + 1) / 2;
 
   let rankingRatio = 0.5;
-  if (student.ranking !== undefined && rankingRange && Number.isFinite(student.ranking)) {
+  if (
+    student.rankingPercent !== undefined &&
+    rankingRange &&
+    Number.isFinite(student.rankingPercent)
+  ) {
     const { min, max } = rankingRange;
     if (Number.isFinite(min) && Number.isFinite(max) && max !== min) {
-      const clampedRanking = clamp(student.ranking, min, max);
+      const clampedRanking = clamp(student.rankingPercent, min, max);
       const normalized = (clampedRanking - min) / (max - min);
       rankingRatio = 1 - normalized;
     }

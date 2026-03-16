@@ -19,25 +19,27 @@ describe('Grouping Algorithm', () => {
     name: `学生${i + 1}`,
     gender: i % 2,
     isLeader: i % 6 === 0,
-    ranking: Math.random(),
+    rankingPercent: i % 5 === 0 ? undefined : (i + 1) / 24,
     major: majors[i % majors.length],
-    totalScore: 60 + Math.random() * 40,
+    learningStyleIntensity: 60 + (i % 7) * 4,
+    initiativeScore: 40 + (i % 6) * 3,
+    extroversionScore: 2 + (i % 5),
     learningStyles: {
-      activeReflective: Math.floor(Math.random() * 23) - 11,
-      sensingIntuitive: Math.floor(Math.random() * 23) - 11,
-      visualVerbal: Math.floor(Math.random() * 23) - 11,
-      sequentialGlobal: Math.floor(Math.random() * 23) - 11,
-      active: Math.floor(Math.random() * 12),
-      reflective: Math.floor(Math.random() * 12),
-      sensing: Math.floor(Math.random() * 12),
-      intuitive: Math.floor(Math.random() * 12),
-      visual: Math.floor(Math.random() * 12),
-      verbal: Math.floor(Math.random() * 12),
-      sequential: Math.floor(Math.random() * 12),
-      global: Math.floor(Math.random() * 12),
+      activeReflective: (i % 6) - 3,
+      sensingIntuitive: (i % 8) - 4,
+      visualVerbal: (i % 10) - 5,
+      sequentialGlobal: (i % 12) - 6,
+      active: 6,
+      reflective: 5,
+      sensing: 5,
+      intuitive: 6,
+      visual: 7,
+      verbal: 4,
+      sequential: 6,
+      global: 5,
     },
     ilsCompleted: true,
-    ilsAnswers: Array.from({ length: 44 }, () => (Math.random() > 0.5 ? 1 : 2)),
+    ilsAnswers: Array.from({ length: 44 }, (_, idx) => ((idx + i) % 2 === 0 ? 1 : 2)),
   }));
 
   describe('initializeRandomGroups', () => {
@@ -65,7 +67,8 @@ describe('Grouping Algorithm', () => {
       expect(stats.genderBalance).toBeGreaterThanOrEqual(0);
       expect(stats.genderBalance).toBeLessThanOrEqual(1);
       expect(stats.leaderCount).toBeGreaterThanOrEqual(0);
-      expect(stats.averageScore).toBeGreaterThan(0);
+      expect(stats.averageInitiativeScore).toBeGreaterThan(0);
+      expect(stats.averageExtroversionScore).toBeGreaterThan(0);
       expect(stats.majorDiversity).toBeGreaterThan(0);
       expect(stats.averageLearningStyle).toHaveLength(4);
     });
@@ -77,7 +80,9 @@ describe('Grouping Algorithm', () => {
       const weights: GroupingWeights = {
         gender: 20,
         major: 20,
-        activeScore: 20,
+        initiative: 20,
+        ranking: 10,
+        extroversion: 10,
         leader: 20,
         intraStyleDiversity: 10,
         interStyleSimilarity: 10,
@@ -85,7 +90,9 @@ describe('Grouping Algorithm', () => {
 
       const score = calculateGroupingQualityScore(groups, weights);
       expect(score).toBeGreaterThan(0);
-      expect(score).toBeLessThanOrEqual(100);
+      expect(score).toBeLessThanOrEqual(
+        Object.values(weights).reduce((sum, value) => sum + value, 0)
+      );
     });
   });
 
@@ -94,8 +101,10 @@ describe('Grouping Algorithm', () => {
       const weights: GroupingWeights = {
         gender: 25,
         major: 25,
-        activeScore: 25,
-        leader: 25,
+        initiative: 15,
+        ranking: 10,
+        extroversion: 5,
+        leader: 20,
         intraStyleDiversity: 0,
         interStyleSimilarity: 0,
       };
@@ -112,7 +121,9 @@ describe('Grouping Algorithm', () => {
       const weights: GroupingWeights = {
         gender: 20,
         major: 20,
-        activeScore: 20,
+        initiative: 15,
+        ranking: 10,
+        extroversion: 10,
         leader: 20,
         intraStyleDiversity: 10,
         interStyleSimilarity: 10,
@@ -144,7 +155,9 @@ describe('Grouping Algorithm', () => {
       const weights: GroupingWeights = {
         gender: 20,
         major: 20,
-        activeScore: 20,
+        initiative: 15,
+        ranking: 10,
+        extroversion: 10,
         leader: 20,
         intraStyleDiversity: 10,
         interStyleSimilarity: 10,
@@ -176,12 +189,46 @@ describe('Grouping Algorithm', () => {
 
       const freeStudents = mockStudents.slice(1);
 
-      const result = balancedRandomGrouping(freeStudents, 6, { seedGroups });
+      const weights: GroupingWeights = {
+        gender: 20,
+        major: 20,
+        initiative: 20,
+        ranking: 20,
+        extroversion: 20,
+        leader: 0,
+        intraStyleDiversity: 10,
+        interStyleSimilarity: 10,
+      };
+
+      const result = balancedRandomGrouping(freeStudents, 6, weights, { seedGroups });
 
       expect(result.groups).toHaveLength(seedGroups.length);
       const firstGroup = result.groups.find((group) => group.groupNumber === 1);
       expect(firstGroup).toBeDefined();
       expect(firstGroup?.members.some((member) => member.id === mockStudents[0].id)).toBe(true);
+    });
+
+    it('should ignore missing ranking percent when scoring ranking balance', () => {
+      const rankedStudents = mockStudents.slice(0, 12);
+      const unrankedStudents = rankedStudents.map((student, index) =>
+        index < 6 ? { ...student, rankingPercent: undefined } : student
+      );
+      const { groups } = initializeRandomGroups(unrankedStudents, 6);
+      const weights: GroupingWeights = {
+        gender: 0,
+        major: 0,
+        initiative: 0,
+        ranking: 100,
+        extroversion: 0,
+        leader: 0,
+        intraStyleDiversity: 0,
+        interStyleSimilarity: 0,
+      };
+
+      const score = calculateGroupingQualityScore(groups, weights);
+
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThanOrEqual(100);
     });
   });
 });

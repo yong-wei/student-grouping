@@ -1,10 +1,11 @@
 import React from 'react';
 import { Card, Avatar, Tag, Descriptions, Space, Typography, Divider } from 'antd';
 import { UserOutlined, CrownOutlined } from '@ant-design/icons';
-import type { FaceFeature, Group } from '../types';
+import type { FaceFeature, Group, VisibleGroupStatistic } from '../types';
 import LearningStyleRadar from './LearningStyleRadar';
 import StudentFace from './StudentFace';
 import { useAppStore } from '../store';
+import { getVisibleGroupStatisticItems } from '../utils/groupStatisticDisplay';
 
 const { Text } = Typography;
 
@@ -14,6 +15,7 @@ interface GroupCardProps {
   rankingRange: { min: number; max: number } | null;
   faceFeatures: Record<FaceFeature, boolean>;
   displayGroupNumber: number;
+  visibleStatistics: VisibleGroupStatistic[];
 }
 
 const GroupCard: React.FC<GroupCardProps> = ({
@@ -21,11 +23,18 @@ const GroupCard: React.FC<GroupCardProps> = ({
   rankingRange,
   faceFeatures,
   displayGroupNumber,
+  visibleStatistics,
   draggable = false,
 }) => {
   const faceEnabled = useAppStore((state) => state.faceSettings.enabled);
   const faceRanges = useAppStore((state) => state.faceSettings.ranges);
   const { members, statistics } = group;
+  const statisticItems = getVisibleGroupStatisticItems(
+    statistics,
+    members.length,
+    visibleStatistics,
+    'card'
+  );
 
   return (
     <Card
@@ -40,17 +49,17 @@ const GroupCard: React.FC<GroupCardProps> = ({
       hoverable={draggable}
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        <Descriptions size="small" column={2}>
-          <Descriptions.Item label="男女比例">
-            {Math.round(statistics.genderBalance * members.length)} :{' '}
-            {members.length - Math.round(statistics.genderBalance * members.length)}
-          </Descriptions.Item>
-          <Descriptions.Item label="组长候选">{statistics.leaderCount}</Descriptions.Item>
-          <Descriptions.Item label="学习风格多样性">
-            {statistics.learningStyleDiversity.toFixed(2)}
-          </Descriptions.Item>
-          <Descriptions.Item label="专业数">{statistics.majorDiversity}</Descriptions.Item>
-        </Descriptions>
+        {statisticItems.length > 0 ? (
+          <Descriptions size="small" column={2}>
+            {statisticItems.map((item) => (
+              <Descriptions.Item key={item.key} label={item.label}>
+                {item.value}
+              </Descriptions.Item>
+            ))}
+          </Descriptions>
+        ) : (
+          <Text type="secondary">当前未显示分组统计信息</Text>
+        )}
 
         <LearningStyleRadar students={members} showTitle={false} height={220} />
 

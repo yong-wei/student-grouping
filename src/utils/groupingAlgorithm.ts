@@ -15,6 +15,39 @@ export interface GroupingOptions {
   seedGroups?: SeedGroup[];
 }
 
+const calculateAverage = (values: number[]): number => {
+  if (values.length === 0) {
+    return 0;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
+const calculateNullableAverage = (values: (number | undefined)[]): number | null => {
+  const validValues = values.filter((value): value is number => value !== undefined);
+  if (validValues.length === 0) {
+    return null;
+  }
+  return calculateAverage(validValues);
+};
+
+const calculateVarianceScore = (values: number[], scale = 1): number => {
+  if (values.length < 2) {
+    return 1;
+  }
+  return 1 / (1 + calculateVariance(values) * scale);
+};
+
+const normalizeBalancedRandomWeights = (weights?: GroupingWeights): GroupingWeights => ({
+  gender: weights?.gender ?? 25,
+  major: weights?.major ?? 25,
+  initiative: weights?.initiative ?? 25,
+  ranking: weights?.ranking ?? 0,
+  extroversion: weights?.extroversion ?? 0,
+  leader: weights?.leader ?? 25,
+  intraStyleDiversity: 0,
+  interStyleSimilarity: 0,
+});
+
 /**
  * 初始化随机分组
  */
@@ -48,8 +81,11 @@ export function calculateGroupStatistics(members: Student[]): GroupStatistics {
     return {
       genderBalance: 0,
       leaderCount: 0,
-      averageScore: 0,
-      averageRanking: 0,
+      averageLearningStyleIntensity: 0,
+      averageInitiativeScore: 0,
+      averageRankingPercent: null,
+      averageExtroversionScore: 0,
+      rankingStudentCount: 0,
       majorDiversity: 0,
       averageLearningStyle: [0, 0, 0, 0],
       learningStyleDiversity: 0,
@@ -58,8 +94,21 @@ export function calculateGroupStatistics(members: Student[]): GroupStatistics {
 
   const maleCount = members.filter((s) => s.gender === 1).length;
   const leaderCount = members.filter((s) => s.isLeader).length;
-  const avgScore = members.reduce((sum, s) => sum + s.totalScore, 0) / members.length;
-  const avgRanking = members.reduce((sum, s) => sum + s.ranking, 0) / members.length;
+  const averageLearningStyleIntensity = calculateAverage(
+    members.map((student) => student.learningStyleIntensity)
+  );
+  const averageInitiativeScore = calculateAverage(
+    members.map((student) => student.initiativeScore)
+  );
+  const averageRankingPercent = calculateNullableAverage(
+    members.map((student) => student.rankingPercent)
+  );
+  const averageExtroversionScore = calculateAverage(
+    members.map((student) => student.extroversionScore)
+  );
+  const rankingStudentCount = members.filter(
+    (student) => typeof student.rankingPercent === 'number'
+  ).length;
 
   // 专业多样性（不同专业的数量）
   const uniqueMajors = new Set(members.map((s) => s.major));
@@ -74,8 +123,11 @@ export function calculateGroupStatistics(members: Student[]): GroupStatistics {
   return {
     genderBalance: maleCount / (members.length || 1),
     leaderCount,
-    averageScore: avgScore,
-    averageRanking: avgRanking,
+    averageLearningStyleIntensity,
+    averageInitiativeScore,
+    averageRankingPercent,
+    averageExtroversionScore,
+    rankingStudentCount,
     majorDiversity,
     averageLearningStyle: averageLearningStyle as [number, number, number, number],
     learningStyleDiversity,
@@ -94,8 +146,11 @@ function cloneGroupStatistics(statistics: GroupStatistics): GroupStatistics {
   return {
     genderBalance: statistics.genderBalance,
     leaderCount: statistics.leaderCount,
-    averageScore: statistics.averageScore,
-    averageRanking: statistics.averageRanking,
+    averageLearningStyleIntensity: statistics.averageLearningStyleIntensity,
+    averageInitiativeScore: statistics.averageInitiativeScore,
+    averageRankingPercent: statistics.averageRankingPercent,
+    averageExtroversionScore: statistics.averageExtroversionScore,
+    rankingStudentCount: statistics.rankingStudentCount,
     majorDiversity: statistics.majorDiversity,
     averageLearningStyle,
     learningStyleDiversity: statistics.learningStyleDiversity,
@@ -178,31 +233,44 @@ function pickUnlockedMemberIndex(
 }
 
 export function calculateGroupingQualityScore(groups: Group[], weights: GroupingWeights): number {
+  if (groups.length === 0) {
+    return 0;
+  }
+
   // 1. 性别均衡分（各组性别比例方差越小越好）
   const genderBalances = groups.map((g) => g.statistics.genderBalance);
-  const genderVariance = calculateVariance(genderBalances);
-  const genderScore = 1 / (1 + genderVariance * 10); // 归一化
+  const genderScore = calculateVarianceScore(genderBalances, 10);
 
   // 2. 学科均衡分（各组专业多样性越高越好，方差越小越好）
   const majorDiversities = groups.map((g) => g.statistics.majorDiversity);
-  const majorVariance = calculateVariance(majorDiversities);
-  const majorScore = 1 / (1 + majorVariance);
+  const majorScore = calculateVarianceScore(majorDiversities);
 
-  // 3. 主动性均衡分（各组平均分方差越小越好）
-  const avgScores = groups.map((g) => g.statistics.averageScore);
-  const scoreVariance = calculateVariance(avgScores);
-  const activeScoreScore = 1 / (1 + scoreVariance / 100);
+  // 3. 主动性均衡分（各组平均主动性分方差越小越好）
+  const averageInitiativeScores = groups.map((group) => group.statistics.averageInitiativeScore);
+  const initiativeScore = calculateVarianceScore(averageInitiativeScores, 0.01);
 
-  // 4. 组长分布分（没有组长的小组数量越少越好）
+  // 4. 成绩均衡分（仅统计有排名数据的小组）
+  const averageRankingPercents = groups
+    .map((group) => group.statistics.averageRankingPercent)
+    .filter((value): value is number => value !== null);
+  const rankingScore = calculateVarianceScore(averageRankingPercents, 10);
+
+  // 5. 外向程度均衡分（各组平均外向分方差越小越好）
+  const averageExtroversionScores = groups.map(
+    (group) => group.statistics.averageExtroversionScore
+  );
+  const extroversionScore = calculateVarianceScore(averageExtroversionScores);
+
+  // 6. 组长分布分（没有组长的小组数量越少越好）
   const groupsWithoutLeader = groups.filter((g) => g.statistics.leaderCount === 0).length;
   const leaderScore = 1 - groupsWithoutLeader / groups.length;
 
-  // 5. 组内学习风格异质性分（平均异质性越高越好）
+  // 7. 组内学习风格异质性分（平均异质性越高越好）
   const avgIntraDiversity =
     groups.reduce((sum, g) => sum + g.statistics.learningStyleDiversity, 0) / groups.length;
   const intraDiversityScore = avgIntraDiversity / 4; // 归一化到 [0,1]
 
-  // 6. 组间学习风格同质性分（各组平均风格向量与总体中心的距离方差越小越好）
+  // 8. 组间学习风格同质性分（各组平均风格向量与总体中心的距离方差越小越好）
   const groupAvgStyles = groups.map((g) => g.statistics.averageLearningStyle);
   const overallAvgStyle: [number, number, number, number] = [0, 0, 0, 0];
   groupAvgStyles.forEach((style) => {
@@ -219,14 +287,15 @@ export function calculateGroupingQualityScore(groups: Group[], weights: Grouping
   ];
 
   const distances = groupAvgStyles.map((style) => calculateVectorDistance(style, centerStyle));
-  const interVariance = calculateVariance(distances);
-  const interSimilarityScore = 1 / (1 + interVariance * 10);
+  const interSimilarityScore = calculateVarianceScore(distances, 10);
 
   // 综合质量分（加权求和）
   const totalScore =
     weights.gender * genderScore +
     weights.major * majorScore +
-    weights.activeScore * activeScoreScore +
+    weights.initiative * initiativeScore +
+    weights.ranking * rankingScore +
+    weights.extroversion * extroversionScore +
     weights.leader * leaderScore +
     weights.intraStyleDiversity * intraDiversityScore +
     weights.interStyleSimilarity * interSimilarityScore;
@@ -344,7 +413,9 @@ function optimizeGroupingWithSeeds(
         averageGroupSize: 0,
         genderVariance: 0,
         majorVariance: 0,
-        scoreVariance: 0,
+        initiativeVariance: 0,
+        rankingVariance: 0,
+        extroversionVariance: 0,
         leaderDistribution: 0,
       },
     };
@@ -432,7 +503,9 @@ function calculateOverallStatistics(groups: Group[]) {
       averageGroupSize: 0,
       genderVariance: 0,
       majorVariance: 0,
-      scoreVariance: 0,
+      initiativeVariance: 0,
+      rankingVariance: 0,
+      extroversionVariance: 0,
       leaderDistribution: 0,
     };
   }
@@ -442,7 +515,13 @@ function calculateOverallStatistics(groups: Group[]) {
 
   const genderBalances = groups.map((g) => g.statistics.genderBalance);
   const majorDiversities = groups.map((g) => g.statistics.majorDiversity);
-  const avgScores = groups.map((g) => g.statistics.averageScore);
+  const averageInitiativeScores = groups.map((g) => g.statistics.averageInitiativeScore);
+  const averageRankingPercents = groups
+    .map((group) => group.statistics.averageRankingPercent)
+    .filter((value): value is number => value !== null);
+  const averageExtroversionScores = groups.map(
+    (group) => group.statistics.averageExtroversionScore
+  );
   const leaderCounts = groups.map((g) => g.statistics.leaderCount);
 
   return {
@@ -451,7 +530,10 @@ function calculateOverallStatistics(groups: Group[]) {
     averageGroupSize: avgGroupSize,
     genderVariance: calculateVariance(genderBalances),
     majorVariance: calculateVariance(majorDiversities),
-    scoreVariance: calculateVariance(avgScores),
+    initiativeVariance: calculateVariance(averageInitiativeScores),
+    rankingVariance:
+      averageRankingPercents.length < 2 ? 0 : calculateVariance(averageRankingPercents),
+    extroversionVariance: calculateVariance(averageExtroversionScores),
     leaderDistribution: leaderCounts.reduce((sum, c) => sum + c, 0) / groups.length,
   };
 }
@@ -462,16 +544,14 @@ function calculateOverallStatistics(groups: Group[]) {
 export function balancedRandomGrouping(
   students: Student[],
   groupSize: number,
+  weights?: GroupingWeights,
   options?: GroupingOptions
 ): GroupingResult {
-  const weights: GroupingWeights = {
-    gender: 25,
-    major: 25,
-    activeScore: 25,
-    leader: 25,
-    intraStyleDiversity: 0,
-    interStyleSimilarity: 0,
-  };
-
-  return optimizeGrouping(students, groupSize, weights, 5000, options);
+  return optimizeGrouping(
+    students,
+    groupSize,
+    normalizeBalancedRandomWeights(weights),
+    5000,
+    options
+  );
 }

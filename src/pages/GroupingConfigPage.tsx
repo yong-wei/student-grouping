@@ -56,10 +56,12 @@ const createTaskDraft = (index: number): TaskFormData => ({
   groupSize: 6,
   mode: 'learning-style',
   weights: {
-    gender: 20,
-    major: 20,
-    activeScore: 20,
-    leader: 20,
+    gender: 15,
+    major: 15,
+    initiative: 15,
+    ranking: 15,
+    extroversion: 10,
+    leader: 10,
     intraStyleDiversity: 10,
     interStyleSimilarity: 10,
   },
@@ -432,7 +434,7 @@ const GroupingConfigPage: React.FC = () => {
         const options = { seedGroups };
         const result =
           task.mode === 'balanced-random'
-            ? balancedRandomGrouping(flexibleStudents, task.groupSize, options)
+            ? balancedRandomGrouping(flexibleStudents, task.groupSize, task.weights, options)
             : optimizeGrouping(flexibleStudents, task.groupSize, task.weights, 10000, options);
 
         results.push({
@@ -672,12 +674,38 @@ const GroupingConfigPage: React.FC = () => {
                   />
                 </Col>
                 <Col span={12}>
-                  <Text>学习主动性均衡度: {task.weights.activeScore}</Text>
+                  <Text>学习主动性均衡度: {task.weights.initiative}</Text>
                   <Slider
-                    value={task.weights.activeScore}
+                    value={task.weights.initiative}
                     onChange={(value) =>
                       handleUpdateTask(task.id, {
-                        weights: { ...task.weights, activeScore: value },
+                        weights: { ...task.weights, initiative: value },
+                      })
+                    }
+                    min={0}
+                    max={50}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Text>成绩均衡度: {task.weights.ranking}</Text>
+                  <Slider
+                    value={task.weights.ranking}
+                    onChange={(value) =>
+                      handleUpdateTask(task.id, {
+                        weights: { ...task.weights, ranking: value },
+                      })
+                    }
+                    min={0}
+                    max={50}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Text>外向程度均衡度: {task.weights.extroversion}</Text>
+                  <Slider
+                    value={task.weights.extroversion}
+                    onChange={(value) =>
+                      handleUpdateTask(task.id, {
+                        weights: { ...task.weights, extroversion: value },
                       })
                     }
                     min={0}

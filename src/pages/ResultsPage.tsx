@@ -8,6 +8,7 @@ import {
   Statistic,
   Space,
   Button,
+  Checkbox,
   message,
   Modal,
   Progress,
@@ -29,7 +30,12 @@ import { exportGroupingToExcel } from '../utils/excelExport';
 import { generateClassAnalysisReport } from '../utils/pdfExport';
 import { generateBatchReports } from '../utils/zipExport';
 import { computeGlobalGroupMaps } from '../utils/groupingExportUtils';
-import type { Student } from '../types';
+import {
+  DEFAULT_VISIBLE_GROUP_STATISTICS,
+  GROUP_STATISTIC_OPTIONS,
+  normalizeVisibleGroupStatistics,
+} from '../utils/groupStatisticDisplay';
+import type { Student, VisibleGroupStatistic } from '../types';
 
 const { Title, Text } = Typography;
 
@@ -45,6 +51,9 @@ const ResultsPage: React.FC = () => {
     null
   );
   const [activeTabKey, setActiveTabKey] = useState('0');
+  const [visibleGroupStatistics, setVisibleGroupStatistics] = useState<VisibleGroupStatistic[]>(
+    DEFAULT_VISIBLE_GROUP_STATISTICS
+  );
 
   const tasksWithResult = React.useMemo(
     () => groupingTasks.filter((task) => task.result && task.result.groups.length > 0),
@@ -73,7 +82,7 @@ const ResultsPage: React.FC = () => {
 
   const rankingRange = React.useMemo(() => {
     const valid = allStudents
-      .map((student) => student.ranking)
+      .map((student) => student.rankingPercent)
       .filter((value) => typeof value === 'number' && Number.isFinite(value)) as number[];
     if (valid.length === 0) {
       return null;
@@ -145,6 +154,7 @@ const ResultsPage: React.FC = () => {
         faceFeatures: faceSettings.features,
         faceRanges: faceSettings.ranges,
         rankingRange,
+        visibleGroupStatistics,
       });
       message.success('班级分析报告导出成功');
     } catch (error) {
@@ -196,6 +206,17 @@ const ResultsPage: React.FC = () => {
     }
   };
 
+  const handleToggleGroupStatistic = (
+    statistic: VisibleGroupStatistic,
+    checked: boolean
+  ) => {
+    setVisibleGroupStatistics((current) =>
+      normalizeVisibleGroupStatistics(
+        checked ? [...current, statistic] : current.filter((item) => item !== statistic)
+      )
+    );
+  };
+
   // 创建标签页内容
   const tabItems = groupingTasks
     .map((task, index) => {
@@ -233,8 +254,9 @@ const ResultsPage: React.FC = () => {
                   </Col>
                 </Row>
                 <Text type="secondary">
-                  质量分 = 性别均衡 × 权重 + 专业多样性 × 权重 + 学习主动性均衡 × 权重 + 组长分布 ×
-                  权重 + 组内学习风格异质性 × 权重 + 组间学习风格同质性 × 权重（权重取自配置页面）。
+                  质量分 = 性别均衡 × 权重 + 学科均衡 × 权重 + 学习主动性均衡 × 权重 + 成绩均衡 ×
+                  权重 + 外向程度均衡 × 权重 + 组长分布 × 权重 + 组内学习风格异质性 × 权重 +
+                  组间学习风格同质性 × 权重（权重取自配置页面）。
                 </Text>
               </Space>
             </Card>
@@ -255,7 +277,7 @@ const ResultsPage: React.FC = () => {
                 <Space direction="vertical" size="small">
                   <Text strong>脸图说明</Text>
                   <Text type="secondary">
-                    脸型映射学生的学习风格：脸型大小表示排名，嘴型对应积极/沉思，鼻子对应感官/直觉，
+                    脸型映射学生的学习风格：脸型大小表示成绩排名百分比，嘴型对应积极/沉思，鼻子对应感官/直觉，
                     眼睛大小对应视觉/言语，眼距对应顺序/全局，眉形补充展示积极倾向。颜色区分性别。
                   </Text>
                 </Space>
@@ -264,22 +286,42 @@ const ResultsPage: React.FC = () => {
             <FaceControls />
 
             <Card title="分组看板" size="small">
-              <Row gutter={[16, 16]}>
-                {result.groups.map((group) => {
-                  const displayNumber =
-                    globalMaps.groupNumberMap.get(`${task.id}__${group.id}`) ?? group.groupNumber;
-                  return (
-                    <Col span={12} key={group.id}>
-                      <GroupCard
-                        group={group}
-                        rankingRange={rankingRange}
-                        faceFeatures={faceSettings.features}
-                        displayGroupNumber={displayNumber}
-                      />
-                    </Col>
-                  );
-                })}
-              </Row>
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                  <Text strong>显示统计信息</Text>
+                  <Space size={[12, 8]} wrap>
+                    {GROUP_STATISTIC_OPTIONS.map((option) => (
+                      <Checkbox
+                        key={option.value}
+                        checked={visibleGroupStatistics.includes(option.value)}
+                        onChange={(event) =>
+                          handleToggleGroupStatistic(option.value, event.target.checked)
+                        }
+                      >
+                        {option.label}
+                      </Checkbox>
+                    ))}
+                  </Space>
+                </Space>
+
+                <Row gutter={[16, 16]}>
+                  {result.groups.map((group) => {
+                    const displayNumber =
+                      globalMaps.groupNumberMap.get(`${task.id}__${group.id}`) ?? group.groupNumber;
+                    return (
+                      <Col span={12} key={group.id}>
+                        <GroupCard
+                          group={group}
+                          rankingRange={rankingRange}
+                          faceFeatures={faceSettings.features}
+                          displayGroupNumber={displayNumber}
+                          visibleStatistics={visibleGroupStatistics}
+                        />
+                      </Col>
+                    );
+                  })}
+                </Row>
+              </Space>
             </Card>
           </Space>
         ),

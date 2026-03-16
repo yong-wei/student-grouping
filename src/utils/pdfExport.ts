@@ -1,5 +1,11 @@
 import jsPDF from 'jspdf';
-import type { FaceFeature, FaceFeatureRanges, GroupingTask, Student } from '../types';
+import type {
+  FaceFeature,
+  FaceFeatureRanges,
+  GroupingTask,
+  Student,
+  VisibleGroupStatistic,
+} from '../types';
 import {
   LEARNING_DIMENSIONS,
   type LearningDimensionDescriptor,
@@ -16,6 +22,10 @@ import { NOTO_SANS_SC_BOLD, NOTO_SANS_SC_REGULAR } from './fonts/notoSansSC';
 import { computeFaceMetrics, deriveFaceParameters, getGenderColor } from './faceUtils';
 import { computeGlobalGroupMaps, collectUniqueStudentsFromTasks } from './groupingExportUtils';
 import { DEFAULT_FACE_RANGES } from './faceConfig';
+import {
+  DEFAULT_VISIBLE_GROUP_STATISTICS,
+  getVisibleGroupStatisticItems,
+} from './groupStatisticDisplay';
 
 const FONT_FAMILY = 'NotoSansSC';
 const FONT_SIZE_TITLE = 18;
@@ -130,18 +140,32 @@ async function addGroupSection(
   startY: number,
   faceOptions: FaceRenderOptions,
   displayNumber: number,
-  taskName: string
+  taskName: string,
+  visibleStatistics: readonly VisibleGroupStatistic[]
 ): Promise<number> {
   const contentWidth = pdf.internal.pageSize.getWidth() - PAGE_MARGIN * 2;
   const chartWidth = 90;
   const chartHeight = 60;
+  const statisticItems = getVisibleGroupStatisticItems(
+    group.statistics,
+    group.members.length,
+    visibleStatistics,
+    'report'
+  );
+  const statisticLines: string[] = [];
+  for (let index = 0; index < statisticItems.length; index += 2) {
+    const current = statisticItems[index];
+    const next = statisticItems[index + 1];
+    statisticLines.push(
+      next
+        ? `${current.label}：${current.value} | ${next.label}：${next.value}`
+        : `${current.label}：${current.value}`
+    );
+  }
 
-  const maleCount = Math.round(group.statistics.genderBalance * group.members.length);
-  const femaleCount = group.members.length - maleCount;
   const summaryLines = [
-    `人数：${group.members.length} 人 | 学习风格多样性：${group.statistics.learningStyleDiversity.toFixed(2)}`,
-    `男女比例：${maleCount}:${femaleCount} | 组长候选：${group.statistics.leaderCount} 人`,
-    `平均学习风格强度：${group.statistics.averageScore.toFixed(2)} | 专业数：${group.statistics.majorDiversity}`,
+    `人数：${group.members.length} 人`,
+    ...statisticLines,
     `来源分组任务：${taskName}`,
   ];
   const memberLines = group.members.map((member: Student) => {
@@ -385,6 +409,7 @@ export async function generateClassAnalysisReport(
     faceFeatures?: Record<FaceFeature, boolean>;
     faceRanges?: FaceFeatureRanges;
     rankingRange?: { min: number; max: number } | null;
+    visibleGroupStatistics?: VisibleGroupStatistic[];
   }
 ): Promise<void> {
   const tasksWithResult = tasks.filter(
@@ -423,6 +448,8 @@ export async function generateClassAnalysisReport(
     ranges: faceRanges,
     rankingRange: options?.rankingRange ?? computeRankingRange(allStudents),
   };
+  const visibleGroupStatistics =
+    options?.visibleGroupStatistics ?? DEFAULT_VISIBLE_GROUP_STATISTICS;
 
   const pdf = new jsPDF('p', 'mm', 'a4');
   ensureFonts(pdf);
@@ -480,7 +507,7 @@ export async function generateClassAnalysisReport(
   pdf.setFont(FONT_FAMILY, 'normal');
   pdf.setFontSize(FONT_SIZE_TEXT);
   const statsDescription =
-    '质量分由六个维度加权求和：性别均衡、专业多样性、学习主动性均衡、组长分布、组内学习风格异质性、组间学习风格同质性。权重取自配置页面设置，可用于对比不同分组任务的平衡性。';
+    '质量分由八个维度加权求和：性别均衡、学科均衡、学习主动性均衡、成绩均衡、外向程度均衡、组长分布、组内学习风格异质性、组间学习风格同质性。权重取自配置页面设置，可用于对比不同分组任务的平衡性。';
   y = addParagraph(
     pdf,
     statsDescription,
@@ -552,7 +579,15 @@ export async function generateClassAnalysisReport(
     const group = result.groups.find((g) => g.id === item.groupId);
     if (!group) continue;
 
-    y = await addGroupSection(pdf, group, y, faceOptions, item.globalGroupNumber, task.name);
+    y = await addGroupSection(
+      pdf,
+      group,
+      y,
+      faceOptions,
+      item.globalGroupNumber,
+      task.name,
+      visibleGroupStatistics
+    );
   }
 
   const fileName = `班级分组分析报告_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -600,7 +635,7 @@ const buildDimensionDataForStudent = (student: Student): DimensionSummary[] =>
 
 const computeRankingRange = (students: Student[]): { min: number; max: number } | null => {
   const rankings = students
-    .map((student) => student.ranking)
+    .map((student) => student.rankingPercent)
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
   if (rankings.length === 0) {
     return null;
