@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildFixedGroupContext,
+  getSeedGroupFlexibleCapacity,
+  isSeedGroupSizeValid,
   resolveFixedGroupsAsIsTaskPlan,
   resolveSeededTaskPlan,
 } from '../utils/fixedGroupPlanning';
@@ -160,5 +162,50 @@ describe('fixedGroupPlanning', () => {
     expect(plan.lockedStudentIds).toEqual(new Set(['1', '2', '3']));
     expect(plan.flexibleStudents.map((student) => student.id)).toEqual(['4', '5', '6']);
     expect(plan.participantIds).toEqual(['4', '5', '6', '1', '2', '3']);
+  });
+
+  it('keeps later fixed groups for later tasks when preserving groups as-is', () => {
+    const students = [
+      createStudent('1', 1),
+      createStudent('2', 1),
+      createStudent('3', 3),
+      createStudent('4', 3),
+      createStudent('5'),
+      createStudent('6'),
+    ];
+    const context = buildFixedGroupContext(students);
+
+    const plan = resolveFixedGroupsAsIsTaskPlan({
+      fixedGroupMap: context.fixedGroupMap,
+      selectedStudents: [students[4], students[5]],
+      groupSize: 2,
+      startGroupNumber: 1,
+    });
+
+    expect(plan.range).toEqual({ start: 1, end: 2 });
+    expect(plan.seedGroups.map((seed) => seed.groupNumber)).toEqual([1, 2]);
+    expect(plan.seedGroups[0].lockedMembers.map((student) => student.id)).toEqual(['1', '2']);
+    expect(plan.seedGroups[0].fillToCapacity).toBe(false);
+    expect(plan.seedGroups[1].lockedMembers).toEqual([]);
+  });
+
+  it('allows oversized preserved groups and gives them no flexible capacity', () => {
+    const preservedSeed = {
+      groupNumber: 1,
+      lockedMembers: [createStudent('1'), createStudent('2'), createStudent('3')],
+      fillToCapacity: false,
+    };
+
+    expect(isSeedGroupSizeValid(preservedSeed, 2)).toBe(true);
+    expect(getSeedGroupFlexibleCapacity(preservedSeed, 2)).toBe(0);
+    expect(
+      isSeedGroupSizeValid(
+        {
+          groupNumber: 2,
+          lockedMembers: preservedSeed.lockedMembers,
+        },
+        2
+      )
+    ).toBe(false);
   });
 });

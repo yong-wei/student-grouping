@@ -32,6 +32,8 @@ import { optimizeGrouping, balancedRandomGrouping } from '../utils/groupingAlgor
 import type { SeedGroup } from '../utils/groupingAlgorithm';
 import {
   buildFixedGroupContext,
+  getSeedGroupFlexibleCapacity,
+  isSeedGroupSizeValid,
   resolveFixedGroupsAsIsTaskPlan,
   resolveSeededTaskPlan,
 } from '../utils/fixedGroupPlanning';
@@ -265,7 +267,7 @@ const GroupingConfigPage: React.FC = () => {
       const { flexibleStudents, participantIds, seedGroups, range } = seededPlan;
 
       seedGroups.forEach((seed) => {
-        if (seed.lockedMembers.length > task.groupSize) {
+        if (!isSeedGroupSizeValid(seed, task.groupSize)) {
           validationErrors.push(
             `分组 ${seed.groupNumber} 的固定学生数量 (${seed.lockedMembers.length}) 已超过设置的小组人数 ${task.groupSize}`
           );
@@ -273,11 +275,7 @@ const GroupingConfigPage: React.FC = () => {
       });
 
       const totalCapacity = seedGroups.reduce(
-        (sum, seed) =>
-          sum +
-          (seed.fillToCapacity === false
-            ? 0
-            : Math.max(task.groupSize - seed.lockedMembers.length, 0)),
+        (sum, seed) => sum + getSeedGroupFlexibleCapacity(seed, task.groupSize),
         0
       );
       if (totalCapacity < flexibleStudents.length) {
