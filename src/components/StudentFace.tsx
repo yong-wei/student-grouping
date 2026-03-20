@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Student, FaceFeatureBindings, FaceFeatureRanges, FaceMetricRanges } from '../types';
-import { deriveFaceParameters, getGenderColor } from '../utils/faceUtils';
+import { deriveFaceParameters, getGenderColor, shouldRenderFaceCue } from '../utils/faceUtils';
 
 interface StudentFaceProps {
   student: Student;
@@ -35,6 +35,10 @@ const StudentFace: React.FC<StudentFaceProps> = ({
   const mouthLeftX = center - metrics.mouthWidth;
   const mouthRightX = center + metrics.mouthWidth;
   const mouthControlY = mouthY + metrics.mouthCurve;
+  const showEyes = shouldRenderFaceCue(bindings, 'eyes');
+  const showEyebrows = shouldRenderFaceCue(bindings, 'eyebrows');
+  const showNose = shouldRenderFaceCue(bindings, 'nose');
+  const showMouth = shouldRenderFaceCue(bindings, 'mouth');
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -47,57 +51,69 @@ const StudentFace: React.FC<StudentFaceProps> = ({
         strokeWidth={1.4}
       />
 
-      <ellipse
-        cx={leftEyeX}
-        cy={eyeY}
-        rx={metrics.eyeRadius}
-        ry={metrics.eyeRadius * 0.85}
-        fill={neutralStroke}
-      />
-      <ellipse
-        cx={rightEyeX}
-        cy={eyeY}
-        rx={metrics.eyeRadius}
-        ry={metrics.eyeRadius * 0.85}
-        fill={neutralStroke}
-      />
+      {showEyes ? (
+        <>
+          <ellipse
+            cx={leftEyeX}
+            cy={eyeY}
+            rx={metrics.eyeRadius}
+            ry={metrics.eyeRadius * 0.85}
+            fill={neutralStroke}
+          />
+          <ellipse
+            cx={rightEyeX}
+            cy={eyeY}
+            rx={metrics.eyeRadius}
+            ry={metrics.eyeRadius * 0.85}
+            fill={neutralStroke}
+          />
+        </>
+      ) : null}
 
-      <line
-        x1={leftEyeX - metrics.eyeRadius}
-        y1={browY - metrics.browTilt}
-        x2={leftEyeX + metrics.eyeRadius}
-        y2={browY + metrics.browTilt}
-        stroke={faceColor}
-        strokeWidth={1.2}
-        strokeLinecap="round"
-      />
-      <line
-        x1={rightEyeX - metrics.eyeRadius}
-        y1={browY + metrics.browTilt}
-        x2={rightEyeX + metrics.eyeRadius}
-        y2={browY - metrics.browTilt}
-        stroke={faceColor}
-        strokeWidth={1.2}
-        strokeLinecap="round"
-      />
+      {showEyebrows ? (
+        <>
+          <line
+            x1={leftEyeX - metrics.eyeRadius}
+            y1={browY - metrics.browTilt}
+            x2={leftEyeX + metrics.eyeRadius}
+            y2={browY + metrics.browTilt}
+            stroke={faceColor}
+            strokeWidth={1.2}
+            strokeLinecap="round"
+          />
+          <line
+            x1={rightEyeX - metrics.eyeRadius}
+            y1={browY + metrics.browTilt}
+            x2={rightEyeX + metrics.eyeRadius}
+            y2={browY - metrics.browTilt}
+            stroke={faceColor}
+            strokeWidth={1.2}
+            strokeLinecap="round"
+          />
+        </>
+      ) : null}
 
-      <line
-        x1={center}
-        y1={noseTopY}
-        x2={center}
-        y2={noseBottomY}
-        stroke={neutralStroke}
-        strokeWidth={1.1}
-        strokeLinecap="round"
-      />
+      {showNose ? (
+        <line
+          x1={center}
+          y1={noseTopY}
+          x2={center}
+          y2={noseBottomY}
+          stroke={neutralStroke}
+          strokeWidth={1.1}
+          strokeLinecap="round"
+        />
+      ) : null}
 
-      <path
-        d={`M ${mouthLeftX} ${mouthY} Q ${center} ${mouthControlY} ${mouthRightX} ${mouthY}`}
-        stroke={faceColor}
-        strokeWidth={1.6}
-        fill="none"
-        strokeLinecap="round"
-      />
+      {showMouth ? (
+        <path
+          d={`M ${mouthLeftX} ${mouthY} Q ${center} ${mouthControlY} ${mouthRightX} ${mouthY}`}
+          stroke={faceColor}
+          strokeWidth={1.6}
+          fill="none"
+          strokeLinecap="round"
+        />
+      ) : null}
     </svg>
   );
 };

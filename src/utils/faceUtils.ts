@@ -21,6 +21,8 @@ export interface FaceParameters {
   browTilt: number;
 }
 
+export type FaceCue = 'mouth' | 'nose' | 'eyes' | 'eyebrows';
+
 export const GENDER_COLORS: Record<'male' | 'female' | 'unknown', string> = {
   male: '#1890ff',
   female: '#fa8c16',
@@ -32,6 +34,9 @@ export const getGenderColor = (gender: number): string => {
   if (gender === 0) return GENDER_COLORS.female;
   return GENDER_COLORS.unknown;
 };
+
+export const shouldRenderFaceCue = (bindings: FaceFeatureBindings, feature: FaceCue): boolean =>
+  bindings[feature] !== 'none';
 
 const normalizeWithRange = (value: number, range: NumericRange | null) => {
   if (!range) {

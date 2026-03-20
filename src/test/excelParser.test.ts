@@ -201,6 +201,29 @@ describe('Excel Parser Utils', () => {
       expect(stats.preGroupedStudents).toBe(1);
       expect(stats.ungroupedStudents).toBe(1);
     });
+
+    it('should read values from literal worksheet headers with trailing spaces', async () => {
+      const file = createWorkbookFile([
+        {
+          '序号 ': 1,
+          '姓名 ': '王五',
+          '学号 ': '2023003',
+          '性别 ': '男',
+          '专业 ': '计算机科学',
+          '分组序号 ': 4,
+        },
+      ]);
+
+      const students = await parseExcelFile(file);
+
+      expect(students).toHaveLength(1);
+      expect(students[0]).toMatchObject({
+        serialNumber: 1,
+        name: '王五',
+        studentNumber: '2023003',
+        groupNumber: 4,
+      });
+    });
   });
 
   describe('validateStudentData', () => {

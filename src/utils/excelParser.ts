@@ -264,7 +264,7 @@ export async function parseExcelFile(file: File): Promise<Student[]> {
           range: 0,
           blankrows: false,
         }) as unknown[][];
-        const headers = (headerRows[0] ?? []).map((value) => String(value ?? '').trim());
+        const headers = (headerRows[0] ?? []).map((value) => String(value ?? ''));
         const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' }) as RowRecord[];
 
         const filteredRows = jsonData.filter((row) => {
