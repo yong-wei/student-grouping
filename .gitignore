@@ -28,3 +28,4 @@ deployment
 deployment/*
 .claude
 .serena/
+.codex
