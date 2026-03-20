@@ -26,9 +26,6 @@ import { useAppStore } from '../store';
 import GroupCard from '../components/GroupCard';
 import LearningStyleDistribution from '../components/LearningStyleDistribution';
 import FaceControls from '../components/FaceControls';
-import { exportGroupingToExcel } from '../utils/excelExport';
-import { generateClassAnalysisReport } from '../utils/pdfExport';
-import { generateBatchReports } from '../utils/zipExport';
 import { computeGlobalGroupMaps } from '../utils/groupingExportUtils';
 import { computeFaceMetricRanges } from '../utils/faceUtils';
 import { FACE_FEATURE_LABELS, FACE_FEATURES, FACE_METRIC_LABELS } from '../utils/faceConfig';
@@ -128,6 +125,7 @@ const ResultsPage: React.FC = () => {
 
     setExportingExcel(true);
     try {
+      const { exportGroupingToExcel } = await import('../utils/excelExport');
       exportGroupingToExcel(groupingTasks);
       message.success('分组结果（含全部任务）导出成功');
     } catch (error) {
@@ -147,6 +145,7 @@ const ResultsPage: React.FC = () => {
     }
     setExportingPdf(true);
     try {
+      const { generateClassAnalysisReport } = await import('../utils/pdfExport');
       await generateClassAnalysisReport(groupingTasks, {
         includeFaces: faceSettings.enabled,
         faceBindings: faceSettings.bindings,
@@ -189,6 +188,7 @@ const ResultsPage: React.FC = () => {
       setExportingZip(true);
       setExportProgress({ current: 0, total: totalStudents });
 
+      const { generateBatchReports } = await import('../utils/zipExport');
       await generateBatchReports(groupingTasks, (current, total) => {
         setExportProgress({ current, total });
       });

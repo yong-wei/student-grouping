@@ -1,5 +1,7 @@
 # 智能学生分组助手
 
+[![CI](https://github.com/yong-wei/student-grouping/actions/workflows/ci.yml/badge.svg)](https://github.com/yong-wei/student-grouping/actions/workflows/ci.yml)
+
 一款纯前端的 Web 应用，帮助教师和教学助理根据学生的问卷调查数据、基本信息和特定分组需求，自动化并优化学生分组流程。
 
 ## ✨ 核心特性

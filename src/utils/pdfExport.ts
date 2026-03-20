@@ -20,7 +20,6 @@ import {
   renderStudentRadar,
 } from './chartExport';
 import { addIndentedParagraph } from './pdfText';
-import { NOTO_SANS_SC_BOLD, NOTO_SANS_SC_REGULAR } from './fonts/notoSansSC';
 import { computeFaceMetricRanges, deriveFaceParameters, getGenderColor } from './faceUtils';
 import { computeGlobalGroupMaps, collectUniqueStudentsFromTasks } from './groupingExportUtils';
 import { DEFAULT_FACE_BINDINGS, DEFAULT_FACE_RANGES, FACE_FEATURES } from './faceConfig';
@@ -36,7 +35,8 @@ const FONT_SIZE_TEXT = 11;
 const LINE_HEIGHT = 6;
 const PAGE_MARGIN = 20;
 
-function ensureFonts(pdf: jsPDF) {
+async function ensureFonts(pdf: jsPDF) {
+  const { NOTO_SANS_SC_BOLD, NOTO_SANS_SC_REGULAR } = await import('./fonts/notoSansSC');
   pdf.addFileToVFS('NotoSansSC-Regular.ttf', NOTO_SANS_SC_REGULAR);
   pdf.addFont('NotoSansSC-Regular.ttf', FONT_FAMILY, 'normal');
   pdf.addFileToVFS('NotoSansSC-Bold.ttf', NOTO_SANS_SC_BOLD);
@@ -450,7 +450,7 @@ export async function generateClassAnalysisReport(
     options?.visibleGroupStatistics ?? DEFAULT_VISIBLE_GROUP_STATISTICS;
 
   const pdf = new jsPDF('p', 'mm', 'a4');
-  ensureFonts(pdf);
+  await ensureFonts(pdf);
   pdf.setFont(FONT_FAMILY, 'bold');
   pdf.setFontSize(FONT_SIZE_TITLE);
 
@@ -700,7 +700,7 @@ export async function generateIndividualReport(
   groupNumber: number
 ): Promise<Blob> {
   const pdf = new jsPDF('p', 'mm', 'a4');
-  ensureFonts(pdf);
+  await ensureFonts(pdf);
   let y = PAGE_MARGIN;
 
   pdf.setFont(FONT_FAMILY, 'bold');
