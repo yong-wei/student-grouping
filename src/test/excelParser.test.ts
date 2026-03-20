@@ -171,6 +171,36 @@ describe('Excel Parser Utils', () => {
       expect(students[0].ilsAnswers).toBeUndefined();
       expect(students[0].learningStyles.activeReflective).toBe(-5);
     });
+
+    it('should preserve sparse pre-group columns when the first row has no group number', async () => {
+      const file = createWorkbookFile([
+        {
+          序号: 1,
+          姓名: '张三',
+          学号: '2023001',
+          性别: '男',
+          专业: '人工智能',
+          分组序号: '',
+        },
+        {
+          序号: 2,
+          姓名: '李四',
+          学号: '2023002',
+          性别: '女',
+          专业: '大数据',
+          分组序号: 3,
+        },
+      ]);
+
+      const students = await parseExcelFile(file);
+      const stats = calculateDataStatistics(students);
+
+      expect(students).toHaveLength(2);
+      expect(students[0].groupNumber).toBeUndefined();
+      expect(students[1].groupNumber).toBe(3);
+      expect(stats.preGroupedStudents).toBe(1);
+      expect(stats.ungroupedStudents).toBe(1);
+    });
   });
 
   describe('validateStudentData', () => {

@@ -1,7 +1,9 @@
 import jsPDF from 'jspdf';
 import type {
+  FaceFeatureBindings,
   FaceFeature,
   FaceFeatureRanges,
+  FaceMetricRanges,
   GroupingTask,
   Student,
   VisibleGroupStatistic,
@@ -19,9 +21,9 @@ import {
 } from './chartExport';
 import { addIndentedParagraph } from './pdfText';
 import { NOTO_SANS_SC_BOLD, NOTO_SANS_SC_REGULAR } from './fonts/notoSansSC';
-import { computeFaceMetrics, deriveFaceParameters, getGenderColor } from './faceUtils';
+import { computeFaceMetricRanges, deriveFaceParameters, getGenderColor } from './faceUtils';
 import { computeGlobalGroupMaps, collectUniqueStudentsFromTasks } from './groupingExportUtils';
-import { DEFAULT_FACE_RANGES } from './faceConfig';
+import { DEFAULT_FACE_BINDINGS, DEFAULT_FACE_RANGES, FACE_FEATURES } from './faceConfig';
 import {
   DEFAULT_VISIBLE_GROUP_STATISTICS,
   getVisibleGroupStatisticItems,
@@ -129,9 +131,9 @@ function formatOrientationDescriptor(
 
 interface FaceRenderOptions {
   includeFaces: boolean;
-  features: Record<FaceFeature, boolean>;
+  bindings: FaceFeatureBindings;
   ranges: FaceFeatureRanges;
-  rankingRange: { min: number; max: number } | null;
+  metricRanges: FaceMetricRanges;
 }
 
 async function addGroupSection(
@@ -243,12 +245,12 @@ async function addGroupSection(
     let gridY = y;
 
     const drawFace = (member: Student, centerX: number, centerY: number) => {
-      const ratios = computeFaceMetrics(member, faceOptions.rankingRange);
       const params = deriveFaceParameters(
         faceSize,
-        ratios,
-        faceOptions.features,
-        faceOptions.ranges
+        member,
+        faceOptions.bindings,
+        faceOptions.ranges,
+        faceOptions.metricRanges
       );
       const faceColor = getGenderColor(member.gender);
 
@@ -406,9 +408,8 @@ export async function generateClassAnalysisReport(
   tasks: GroupingTask[],
   options?: {
     includeFaces?: boolean;
-    faceFeatures?: Record<FaceFeature, boolean>;
+    faceBindings?: FaceFeatureBindings;
     faceRanges?: FaceFeatureRanges;
-    rankingRange?: { min: number; max: number } | null;
     visibleGroupStatistics?: VisibleGroupStatistic[];
   }
 ): Promise<void> {
@@ -432,21 +433,18 @@ export async function generateClassAnalysisReport(
     });
   }
 
-  const defaultFaceFeatures: Record<FaceFeature, boolean> = {
-    faceSize: true,
-    mouth: true,
-    nose: true,
-    eyes: true,
-    eyeSpacing: true,
-    eyebrows: true,
-  };
-  const faceFeatures = options?.faceFeatures ?? defaultFaceFeatures;
+  const faceBindings: FaceFeatureBindings = { ...DEFAULT_FACE_BINDINGS };
+  if (options?.faceBindings) {
+    FACE_FEATURES.forEach((feature) => {
+      faceBindings[feature] = options.faceBindings![feature];
+    });
+  }
 
   const faceOptions: FaceRenderOptions = {
     includeFaces: Boolean(options?.includeFaces),
-    features: faceFeatures,
+    bindings: faceBindings,
     ranges: faceRanges,
-    rankingRange: options?.rankingRange ?? computeRankingRange(allStudents),
+    metricRanges: computeFaceMetricRanges(allStudents),
   };
   const visibleGroupStatistics =
     options?.visibleGroupStatistics ?? DEFAULT_VISIBLE_GROUP_STATISTICS;
@@ -632,21 +630,6 @@ const buildDimensionDataForStudent = (student: Student): DimensionSummary[] =>
     rightValue: student.learningStyles[descriptor.rightValueKey],
     diff: student.learningStyles[descriptor.diffKey],
   }));
-
-const computeRankingRange = (students: Student[]): { min: number; max: number } | null => {
-  const rankings = students
-    .map((student) => student.rankingPercent)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-  if (rankings.length === 0) {
-    return null;
-  }
-  const min = Math.min(...rankings);
-  const max = Math.max(...rankings);
-  if (Math.abs(max - min) < Number.EPSILON) {
-    return null;
-  }
-  return { min, max };
-};
 
 const drawLearningStyleChart = (
   pdf: jsPDF,

@@ -30,6 +30,8 @@ import { exportGroupingToExcel } from '../utils/excelExport';
 import { generateClassAnalysisReport } from '../utils/pdfExport';
 import { generateBatchReports } from '../utils/zipExport';
 import { computeGlobalGroupMaps } from '../utils/groupingExportUtils';
+import { computeFaceMetricRanges } from '../utils/faceUtils';
+import { FACE_FEATURE_LABELS, FACE_FEATURES, FACE_METRIC_LABELS } from '../utils/faceConfig';
 import {
   DEFAULT_VISIBLE_GROUP_STATISTICS,
   GROUP_STATISTIC_OPTIONS,
@@ -80,20 +82,16 @@ const ResultsPage: React.FC = () => {
     return Array.from(map.values()).sort((a, b) => a.serialNumber - b.serialNumber);
   }, [groupingTasks]);
 
-  const rankingRange = React.useMemo(() => {
-    const valid = allStudents
-      .map((student) => student.rankingPercent)
-      .filter((value) => typeof value === 'number' && Number.isFinite(value)) as number[];
-    if (valid.length === 0) {
-      return null;
-    }
-    const min = Math.min(...valid);
-    const max = Math.max(...valid);
-    if (Math.abs(max - min) < Number.EPSILON) {
-      return null;
-    }
-    return { min, max };
-  }, [allStudents]);
+  const faceMetricRanges = React.useMemo(() => computeFaceMetricRanges(allStudents), [allStudents]);
+
+  const faceBindingSummary = React.useMemo(
+    () =>
+      FACE_FEATURES.filter((feature) => faceSettings.bindings[feature] !== 'none').map(
+        (feature) =>
+          `${FACE_FEATURE_LABELS[feature]}：${FACE_METRIC_LABELS[faceSettings.bindings[feature]]}`
+      ),
+    [faceSettings.bindings]
+  );
 
   // 如果没有分组任务，跳转回配置页
   React.useEffect(() => {
@@ -151,9 +149,8 @@ const ResultsPage: React.FC = () => {
     try {
       await generateClassAnalysisReport(groupingTasks, {
         includeFaces: faceSettings.enabled,
-        faceFeatures: faceSettings.features,
+        faceBindings: faceSettings.bindings,
         faceRanges: faceSettings.ranges,
-        rankingRange,
         visibleGroupStatistics,
       });
       message.success('班级分析报告导出成功');
@@ -206,10 +203,7 @@ const ResultsPage: React.FC = () => {
     }
   };
 
-  const handleToggleGroupStatistic = (
-    statistic: VisibleGroupStatistic,
-    checked: boolean
-  ) => {
+  const handleToggleGroupStatistic = (statistic: VisibleGroupStatistic, checked: boolean) => {
     setVisibleGroupStatistics((current) =>
       normalizeVisibleGroupStatistics(
         checked ? [...current, statistic] : current.filter((item) => item !== statistic)
@@ -277,8 +271,7 @@ const ResultsPage: React.FC = () => {
                 <Space direction="vertical" size="small">
                   <Text strong>脸图说明</Text>
                   <Text type="secondary">
-                    脸型映射学生的学习风格：脸型大小表示成绩排名百分比，嘴型对应积极/沉思，鼻子对应感官/直觉，
-                    眼睛大小对应视觉/言语，眼距对应顺序/全局，眉形补充展示积极倾向。颜色区分性别。
+                    当前映射：{faceBindingSummary.join('；') || '全部特征均已隐藏'}。颜色区分性别。
                   </Text>
                 </Space>
               </Card>
@@ -312,8 +305,8 @@ const ResultsPage: React.FC = () => {
                       <Col span={12} key={group.id}>
                         <GroupCard
                           group={group}
-                          rankingRange={rankingRange}
-                          faceFeatures={faceSettings.features}
+                          faceBindings={faceSettings.bindings}
+                          faceMetricRanges={faceMetricRanges}
                           displayGroupNumber={displayNumber}
                           visibleStatistics={visibleGroupStatistics}
                         />

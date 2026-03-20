@@ -129,6 +129,16 @@ export interface UploadedData {
 }
 
 export type FaceFeature = 'faceSize' | 'mouth' | 'nose' | 'eyes' | 'eyeSpacing' | 'eyebrows';
+export type FaceMetricKey =
+  | 'none'
+  | 'rankingPercent'
+  | 'initiativeScore'
+  | 'extroversionScore'
+  | 'learningStyleIntensity'
+  | 'activeReflective'
+  | 'sensingIntuitive'
+  | 'visualVerbal'
+  | 'sequentialGlobal';
 
 export interface FaceFeatureRange {
   min: number;
@@ -136,3 +146,16 @@ export interface FaceFeatureRange {
 }
 
 export type FaceFeatureRanges = Record<FaceFeature, FaceFeatureRange>;
+export type FaceFeatureBindings = Record<FaceFeature, FaceMetricKey>;
+
+export interface NumericRange {
+  min: number;
+  max: number;
+}
+
+export interface FaceMetricRanges {
+  rankingPercent: NumericRange | null;
+  initiativeScore: NumericRange | null;
+  extroversionScore: NumericRange | null;
+  learningStyleIntensity: NumericRange | null;
+}

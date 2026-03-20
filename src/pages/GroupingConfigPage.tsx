@@ -29,6 +29,7 @@ import { useAppStore } from '../store';
 import type { GroupingTask, GroupingTaskDraft, Student } from '../types';
 import { optimizeGrouping, balancedRandomGrouping } from '../utils/groupingAlgorithm';
 import type { SeedGroup } from '../utils/groupingAlgorithm';
+import { buildFixedGroupContext, resolveSeededTaskPlan } from '../utils/fixedGroupPlanning';
 
 const { Title, Text } = Typography;
 
@@ -139,49 +140,9 @@ const GroupingConfigPage: React.FC = () => {
   }, [tasks, activeKey]);
 
   const students = useMemo(() => uploadedData?.students ?? [], [uploadedData]);
-
-  const fixedStudents = useMemo(
-    () =>
-      students.filter((student) => {
-        const { groupNumber } = student;
-        return (
-          typeof groupNumber === 'number' &&
-          Number.isFinite(groupNumber) &&
-          Number.isInteger(groupNumber) &&
-          groupNumber > 0
-        );
-      }),
-    [students]
-  );
-
-  const fixedStudentIds = useMemo(
-    () => new Set(fixedStudents.map((student) => student.id)),
-    [fixedStudents]
-  );
-
-  const fixedGroupMap = useMemo(() => {
-    const map = new Map<number, Student[]>();
-    fixedStudents.forEach((student) => {
-      const groupNumber = Number(student.groupNumber);
-      if (!Number.isInteger(groupNumber) || groupNumber <= 0) return;
-      const existing = map.get(groupNumber);
-      if (existing) {
-        existing.push(student);
-      } else {
-        map.set(groupNumber, [student]);
-      }
-    });
-    return map;
-  }, [fixedStudents]);
-
-  const highestFixedGroupNumber = useMemo(() => {
-    if (fixedStudents.length === 0) return 0;
-    return fixedStudents.reduce((max, student) => {
-      const value = Number(student.groupNumber ?? 0);
-      if (!Number.isFinite(value)) return max;
-      return value > max ? value : max;
-    }, 0);
-  }, [fixedStudents]);
+  const fixedGroupContext = useMemo(() => buildFixedGroupContext(students), [students]);
+  const { fixedStudents, fixedStudentIds, fixedGroupMap, highestFixedGroupNumber } =
+    fixedGroupContext;
 
   const unassignedStudents = useMemo(() => students, [students]);
 
@@ -271,71 +232,18 @@ const GroupingConfigPage: React.FC = () => {
     let groupCursor = 0;
 
     taskEntries.forEach(({ task, students }) => {
-      const participantSet = new Set<string>();
-      students.forEach((student) => participantSet.add(student.id));
-
       const startGroupNumber = groupCursor + 1;
-      let maxGroups =
-        participantSet.size > 0 ? Math.max(1, Math.ceil(participantSet.size / task.groupSize)) : 0;
-      let endGroupNumber = maxGroups > 0 ? startGroupNumber + maxGroups - 1 : startGroupNumber - 1;
+      const seededPlan = resolveSeededTaskPlan({
+        fixedGroupMap,
+        selectedStudents: students,
+        groupSize: task.groupSize,
+        startGroupNumber,
+      });
 
-      let adjusted = true;
-      while (adjusted) {
-        adjusted = false;
-
-        if (maxGroups === 0) {
-          const lockedAtStart = fixedGroupMap.get(startGroupNumber);
-          if (lockedAtStart && lockedAtStart.length > 0) {
-            maxGroups = 1;
-            endGroupNumber = startGroupNumber;
-            adjusted = true;
-          } else {
-            break;
-          }
-        }
-
-        for (let groupNumber = startGroupNumber; groupNumber <= endGroupNumber; groupNumber += 1) {
-          const lockedMembers = fixedGroupMap.get(groupNumber);
-          if (!lockedMembers || lockedMembers.length === 0) continue;
-          lockedMembers.forEach((member) => {
-            if (!participantSet.has(member.id)) {
-              participantSet.add(member.id);
-              adjusted = true;
-            }
-          });
-        }
-
-        if (maxGroups > 0) {
-          const requiredGroups = Math.max(1, Math.ceil(participantSet.size / task.groupSize));
-          if (requiredGroups > maxGroups) {
-            maxGroups = requiredGroups;
-            endGroupNumber = startGroupNumber + maxGroups - 1;
-            adjusted = true;
-          }
-        }
-      }
-
-      if (maxGroups === 0) {
+      if (seededPlan.seedGroups.length === 0) {
         return;
       }
-
-      const seedGroups: SeedGroup[] = [];
-      const lockedStudentIds = new Set<string>();
-      for (let groupNumber = startGroupNumber; groupNumber <= endGroupNumber; groupNumber += 1) {
-        const lockedMembers = fixedGroupMap.get(groupNumber) ?? [];
-        seedGroups.push({ groupNumber, lockedMembers });
-        lockedMembers.forEach((member) => lockedStudentIds.add(member.id));
-      }
-
-      const participantStudents = Array.from(participantSet)
-        .map((id) => studentMap.get(id))
-        .filter((student): student is Student => Boolean(student));
-
-      const participantIds = Array.from(new Set(participantStudents.map((student) => student.id)));
-
-      const flexibleStudents = participantStudents.filter(
-        (student) => !lockedStudentIds.has(student.id)
-      );
+      const { flexibleStudents, participantIds, seedGroups, range } = seededPlan;
 
       seedGroups.forEach((seed) => {
         if (seed.lockedMembers.length > task.groupSize) {
@@ -362,10 +270,10 @@ const GroupingConfigPage: React.FC = () => {
         participantIds,
         flexibleStudents,
         seedGroups,
-        range: { start: startGroupNumber, end: endGroupNumber },
+        range,
       });
       planMap.set(task.id, participantIds);
-      groupCursor = endGroupNumber;
+      groupCursor = range.end;
     });
 
     const assignedLockedIds = new Set<string>();

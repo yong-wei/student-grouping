@@ -1,26 +1,25 @@
 import React, { useMemo } from 'react';
-import type { Student, FaceFeature, FaceFeatureRanges } from '../types';
-import { computeFaceMetrics, deriveFaceParameters, getGenderColor } from '../utils/faceUtils';
+import type { Student, FaceFeatureBindings, FaceFeatureRanges, FaceMetricRanges } from '../types';
+import { deriveFaceParameters, getGenderColor } from '../utils/faceUtils';
 
 interface StudentFaceProps {
   student: Student;
   size?: number;
-  rankingRange: { min: number; max: number } | null;
-  features: Record<FaceFeature, boolean>;
+  bindings: FaceFeatureBindings;
   ranges: FaceFeatureRanges;
+  metricRanges: FaceMetricRanges;
 }
 
 const StudentFace: React.FC<StudentFaceProps> = ({
   student,
   size = 72,
-  rankingRange,
-  features,
+  bindings,
   ranges,
+  metricRanges,
 }) => {
   const metrics = useMemo(() => {
-    const ratios = computeFaceMetrics(student, rankingRange);
-    return deriveFaceParameters(size, ratios, features, ranges);
-  }, [features, rankingRange, ranges, size, student]);
+    return deriveFaceParameters(size, student, bindings, ranges, metricRanges);
+  }, [bindings, metricRanges, ranges, size, student]);
 
   const center = size / 2;
   const faceColor = getGenderColor(student.gender);

@@ -200,6 +200,7 @@ describe('ResultsPage', () => {
     expect(options).toEqual(
       expect.objectContaining({
         visibleGroupStatistics: expect.arrayContaining(['averageInitiativeScore']),
+        faceBindings: expect.any(Object),
       })
     );
     expect(options.visibleGroupStatistics).not.toContain('averageExtroversionScore');
