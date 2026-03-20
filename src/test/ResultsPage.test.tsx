@@ -95,6 +95,7 @@ const groupingTask: GroupingTask = {
   name: '任务一',
   studentIds: members.map((member) => member.id),
   groupSize: 2,
+  fillFixedGroups: true,
   mode: 'learning-style',
   weights: {
     gender: 1,

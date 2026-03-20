@@ -9,6 +9,7 @@ import {
   Radio,
   Slider,
   Space,
+  Checkbox,
   Transfer,
   message,
   Row,
@@ -29,7 +30,11 @@ import { useAppStore } from '../store';
 import type { GroupingTask, GroupingTaskDraft, Student } from '../types';
 import { optimizeGrouping, balancedRandomGrouping } from '../utils/groupingAlgorithm';
 import type { SeedGroup } from '../utils/groupingAlgorithm';
-import { buildFixedGroupContext, resolveSeededTaskPlan } from '../utils/fixedGroupPlanning';
+import {
+  buildFixedGroupContext,
+  resolveFixedGroupsAsIsTaskPlan,
+  resolveSeededTaskPlan,
+} from '../utils/fixedGroupPlanning';
 
 const { Title, Text } = Typography;
 
@@ -55,6 +60,7 @@ const createTaskDraft = (index: number): TaskFormData => ({
   name: `分组任务 ${index + 1}`,
   studentIds: [],
   groupSize: 6,
+  fillFixedGroups: true,
   mode: 'learning-style',
   weights: {
     gender: 15,
@@ -114,7 +120,13 @@ const GroupingConfigPage: React.FC = () => {
   useEffect(() => {
     if (initialisedDraftsRef.current) return;
     if (taskDrafts.length > 0) {
-      setTasks(taskDrafts.map((draft) => ({ ...draft, randomSelectCount: undefined })));
+      setTasks(
+        taskDrafts.map((draft) => ({
+          ...draft,
+          fillFixedGroups: draft.fillFixedGroups ?? true,
+          randomSelectCount: undefined,
+        }))
+      );
       setActiveKey([taskDrafts[taskDrafts.length - 1].id]);
     }
     initialisedDraftsRef.current = true;
@@ -233,12 +245,19 @@ const GroupingConfigPage: React.FC = () => {
 
     taskEntries.forEach(({ task, students }) => {
       const startGroupNumber = groupCursor + 1;
-      const seededPlan = resolveSeededTaskPlan({
-        fixedGroupMap,
-        selectedStudents: students,
-        groupSize: task.groupSize,
-        startGroupNumber,
-      });
+      const seededPlan = task.fillFixedGroups
+        ? resolveSeededTaskPlan({
+            fixedGroupMap,
+            selectedStudents: students,
+            groupSize: task.groupSize,
+            startGroupNumber,
+          })
+        : resolveFixedGroupsAsIsTaskPlan({
+            fixedGroupMap,
+            selectedStudents: students,
+            groupSize: task.groupSize,
+            startGroupNumber,
+          });
 
       if (seededPlan.seedGroups.length === 0) {
         return;
@@ -254,7 +273,11 @@ const GroupingConfigPage: React.FC = () => {
       });
 
       const totalCapacity = seedGroups.reduce(
-        (sum, seed) => sum + Math.max(task.groupSize - seed.lockedMembers.length, 0),
+        (sum, seed) =>
+          sum +
+          (seed.fillToCapacity === false
+            ? 0
+            : Math.max(task.groupSize - seed.lockedMembers.length, 0)),
         0
       );
       if (totalCapacity < flexibleStudents.length) {
@@ -350,6 +373,7 @@ const GroupingConfigPage: React.FC = () => {
           name: task.name,
           studentIds: participantIds,
           groupSize: task.groupSize,
+          fillFixedGroups: task.fillFixedGroups,
           mode: task.mode,
           weights: task.weights,
           result,
@@ -542,13 +566,28 @@ const GroupingConfigPage: React.FC = () => {
                 </Col>
                 <Col span={12}>
                   <Form.Item label="小组人数">
-                    <InputNumber
-                      min={3}
-                      max={10}
-                      value={task.groupSize}
-                      onChange={(value) => handleUpdateTask(task.id, { groupSize: value || 6 })}
-                      style={{ width: '100%' }}
-                    />
+                    <Space direction="vertical" style={{ width: '100%' }} size="small">
+                      <InputNumber
+                        min={3}
+                        max={10}
+                        value={task.groupSize}
+                        onChange={(value) => handleUpdateTask(task.id, { groupSize: value || 6 })}
+                        style={{ width: '100%' }}
+                      />
+                      <Checkbox
+                        checked={task.fillFixedGroups}
+                        onChange={(event) =>
+                          handleUpdateTask(task.id, {
+                            fillFixedGroups: event.target.checked,
+                          })
+                        }
+                      >
+                        补齐固定分组人数
+                      </Checkbox>
+                      <Text type="secondary">
+                        取消勾选后，固定分组将按导入表原样输出，仅对未固定学生进行分组。
+                      </Text>
+                    </Space>
                   </Form.Item>
                 </Col>
               </Row>

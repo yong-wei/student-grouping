@@ -121,3 +121,73 @@ export function resolveSeededTaskPlan(args: {
     range: { start: startGroupNumber, end: endGroupNumber },
   };
 }
+
+export function resolveFixedGroupsAsIsTaskPlan(args: {
+  fixedGroupMap: Map<number, Student[]>;
+  selectedStudents: Student[];
+  groupSize: number;
+  startGroupNumber: number;
+}): {
+  participantIds: string[];
+  participantStudents: Student[];
+  flexibleStudents: Student[];
+  lockedStudentIds: Set<string>;
+  seedGroups: SeedGroup[];
+  range: { start: number; end: number };
+} {
+  const { fixedGroupMap, selectedStudents, groupSize, startGroupNumber } = args;
+  const remainingFixedGroups = Array.from(fixedGroupMap.entries())
+    .filter(([groupNumber]) => groupNumber >= startGroupNumber)
+    .sort(([left], [right]) => left - right);
+
+  const participantMap = new Map(selectedStudents.map((student) => [student.id, student]));
+  const lockedStudentIds = new Set<string>();
+
+  const fixedSeedGroups: SeedGroup[] = remainingFixedGroups.map(([groupNumber, lockedMembers]) => {
+    lockedMembers.forEach((student) => {
+      participantMap.set(student.id, student);
+      lockedStudentIds.add(student.id);
+    });
+
+    return {
+      groupNumber,
+      lockedMembers,
+      fillToCapacity: false,
+    };
+  });
+
+  const flexibleStudents = selectedStudents.filter((student) => !lockedStudentIds.has(student.id));
+  const flexibleGroupCount =
+    flexibleStudents.length > 0 ? Math.max(1, Math.ceil(flexibleStudents.length / groupSize)) : 0;
+  const occupiedGroupNumbers = new Set(fixedSeedGroups.map((seed) => seed.groupNumber));
+  const flexibleSeedGroups: SeedGroup[] = [];
+
+  let candidateGroupNumber = startGroupNumber;
+  while (flexibleSeedGroups.length < flexibleGroupCount) {
+    if (!occupiedGroupNumbers.has(candidateGroupNumber)) {
+      flexibleSeedGroups.push({
+        groupNumber: candidateGroupNumber,
+        lockedMembers: [],
+      });
+    }
+    candidateGroupNumber += 1;
+  }
+
+  const seedGroups = [...fixedSeedGroups, ...flexibleSeedGroups].sort(
+    (left, right) => left.groupNumber - right.groupNumber
+  );
+  const participantStudents = Array.from(participantMap.values());
+  const endGroupNumber =
+    seedGroups.length > 0
+      ? Math.max(...seedGroups.map((seed) => seed.groupNumber))
+      : startGroupNumber - 1;
+
+  return {
+    participantIds: participantStudents.map((student) => student.id),
+    participantStudents,
+    flexibleStudents,
+    lockedStudentIds,
+    seedGroups,
+    range: { start: startGroupNumber, end: endGroupNumber },
+  };
+}
