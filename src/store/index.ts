@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import type {
   FaceFeature,
+  FaceFeatureBindings,
   FaceFeatureRanges,
+  FaceMetricKey,
   GroupingTask,
   GroupingTaskDraft,
   UploadedData,
 } from '../types';
 import {
+  DEFAULT_FACE_BINDINGS,
   DEFAULT_FACE_EXAGGERATIONS,
   DEFAULT_FACE_RANGES,
   exaggerationToRange,
@@ -40,12 +43,12 @@ interface AppState {
   // 学习风格脸图设置
   faceSettings: {
     enabled: boolean;
-    features: Record<FaceFeature, boolean>;
+    bindings: FaceFeatureBindings;
     ranges: FaceFeatureRanges;
     exaggerations: Record<FaceFeature, number>;
   };
   setFaceEnabled: (enabled: boolean) => void;
-  setFaceFeatures: (features: Record<FaceFeature, boolean>) => void;
+  setFaceBinding: (feature: FaceFeature, metric: FaceMetricKey) => void;
   setFaceExaggeration: (feature: FaceFeature, value: number) => void;
 }
 
@@ -87,14 +90,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   faceSettings: {
     enabled: false,
-    features: {
-      faceSize: true,
-      mouth: true,
-      nose: true,
-      eyes: true,
-      eyeSpacing: true,
-      eyebrows: true,
-    },
+    bindings: DEFAULT_FACE_BINDINGS,
     ranges: DEFAULT_FACE_RANGES,
     exaggerations: DEFAULT_FACE_EXAGGERATIONS,
   },
@@ -110,19 +106,18 @@ export const useAppStore = create<AppState>((set) => ({
         },
       };
     }),
-  setFaceFeatures: (features) =>
+  setFaceBinding: (feature, metric) =>
     set((state) => {
-      const current = state.faceSettings.features;
-      const changed = (Object.keys(features) as FaceFeature[]).some(
-        (key) => current[key] !== features[key]
-      );
-      if (!changed) {
+      if (state.faceSettings.bindings[feature] === metric) {
         return {};
       }
       return {
         faceSettings: {
           ...state.faceSettings,
-          features,
+          bindings: {
+            ...state.faceSettings.bindings,
+            [feature]: metric,
+          },
         },
       };
     }),

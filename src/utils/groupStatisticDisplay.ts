@@ -43,7 +43,9 @@ export const GROUP_STATISTIC_DEFINITIONS: GroupStatisticDefinition[] = [
     key: 'averageRankingPercent',
     label: '平均成绩排名百分比',
     format: (statistics) =>
-      statistics.averageRankingPercent === null ? '无数据' : statistics.averageRankingPercent.toFixed(2),
+      statistics.averageRankingPercent === null
+        ? '无数据'
+        : statistics.averageRankingPercent.toFixed(2),
   },
   {
     key: 'averageLearningStyleIntensity',
@@ -62,9 +64,7 @@ export const GROUP_STATISTIC_OPTIONS = GROUP_STATISTIC_DEFINITIONS.map(({ key, l
   value: key,
 }));
 
-export const DEFAULT_VISIBLE_GROUP_STATISTICS = GROUP_STATISTIC_DEFINITIONS.map(
-  ({ key }) => key
-);
+export const DEFAULT_VISIBLE_GROUP_STATISTICS = GROUP_STATISTIC_DEFINITIONS.map(({ key }) => key);
 
 export function normalizeVisibleGroupStatistics(
   values: readonly VisibleGroupStatistic[]

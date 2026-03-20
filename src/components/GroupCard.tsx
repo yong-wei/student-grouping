@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, Avatar, Tag, Descriptions, Space, Typography, Divider } from 'antd';
 import { UserOutlined, CrownOutlined } from '@ant-design/icons';
-import type { FaceFeature, Group, VisibleGroupStatistic } from '../types';
+import type { FaceFeatureBindings, FaceMetricRanges, Group, VisibleGroupStatistic } from '../types';
 import LearningStyleRadar from './LearningStyleRadar';
 import StudentFace from './StudentFace';
 import { useAppStore } from '../store';
@@ -12,16 +12,16 @@ const { Text } = Typography;
 interface GroupCardProps {
   group: Group;
   draggable?: boolean;
-  rankingRange: { min: number; max: number } | null;
-  faceFeatures: Record<FaceFeature, boolean>;
+  faceBindings: FaceFeatureBindings;
+  faceMetricRanges: FaceMetricRanges;
   displayGroupNumber: number;
   visibleStatistics: VisibleGroupStatistic[];
 }
 
 const GroupCard: React.FC<GroupCardProps> = ({
   group,
-  rankingRange,
-  faceFeatures,
+  faceBindings,
+  faceMetricRanges,
   displayGroupNumber,
   visibleStatistics,
   draggable = false,
@@ -71,9 +71,9 @@ const GroupCard: React.FC<GroupCardProps> = ({
               {faceEnabled ? (
                 <StudentFace
                   student={member}
-                  rankingRange={rankingRange}
-                  features={faceFeatures}
+                  bindings={faceBindings}
                   ranges={faceRanges}
+                  metricRanges={faceMetricRanges}
                   size={70}
                 />
               ) : (

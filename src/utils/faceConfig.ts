@@ -1,4 +1,4 @@
-import type { FaceFeature, FaceFeatureRanges } from '../types';
+import type { FaceFeature, FaceFeatureBindings, FaceFeatureRanges, FaceMetricKey } from '../types';
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -12,6 +12,40 @@ export const FACE_FEATURES: FaceFeature[] = [
   'eyeSpacing',
   'eyebrows',
 ];
+
+export const FACE_FEATURE_LABELS: Record<FaceFeature, string> = {
+  faceSize: '脸型大小',
+  mouth: '嘴型',
+  nose: '鼻子',
+  eyes: '眼睛大小',
+  eyeSpacing: '眼距',
+  eyebrows: '眉形',
+};
+
+export const DEFAULT_FACE_BINDINGS: FaceFeatureBindings = {
+  faceSize: 'rankingPercent',
+  mouth: 'activeReflective',
+  nose: 'sensingIntuitive',
+  eyes: 'visualVerbal',
+  eyeSpacing: 'sequentialGlobal',
+  eyebrows: 'activeReflective',
+};
+
+export const FACE_METRIC_LABELS: Record<FaceMetricKey, string> = {
+  none: '不显示',
+  rankingPercent: '成绩排名百分比',
+  initiativeScore: '学习主动性总分',
+  extroversionScore: '外向程度',
+  learningStyleIntensity: '学习风格强度',
+  activeReflective: '积极 / 沉思',
+  sensingIntuitive: '感官 / 直觉',
+  visualVerbal: '视觉 / 言语',
+  sequentialGlobal: '顺序 / 全局',
+};
+
+export const FACE_METRIC_OPTIONS: { label: string; value: FaceMetricKey }[] = (
+  Object.entries(FACE_METRIC_LABELS) as [FaceMetricKey, string][]
+).map(([value, label]) => ({ value, label }));
 
 export const DEFAULT_FACE_EXAGGERATIONS: Record<FaceFeature, number> = FACE_FEATURES.reduce(
   (acc, feature) => {

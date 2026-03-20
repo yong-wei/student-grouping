@@ -32,4 +32,10 @@ describe('App Store', () => {
     expect(noseRange.min).toBeCloseTo(0.375, 6);
     expect(noseRange.max).toBeCloseTo(0.625, 6);
   });
+
+  it('updates face feature binding', () => {
+    const { setFaceBinding } = useAppStore.getState();
+    setFaceBinding('mouth', 'initiativeScore');
+    expect(useAppStore.getState().faceSettings.bindings.mouth).toBe('initiativeScore');
+  });
 });

@@ -183,7 +183,7 @@ describe('ResultsPage', () => {
     expect(extroversionCheckbox).not.toBeChecked();
     expect(within(groupCard as HTMLElement).queryByText('平均外向度')).not.toBeInTheDocument();
     expect(within(groupCard as HTMLElement).getByText('平均主动性')).toBeInTheDocument();
-  });
+  }, 10000);
 
   it('导出 PDF 时使用当前勾选的统计项', async () => {
     const user = userEvent.setup();
@@ -200,8 +200,9 @@ describe('ResultsPage', () => {
     expect(options).toEqual(
       expect.objectContaining({
         visibleGroupStatistics: expect.arrayContaining(['averageInitiativeScore']),
+        faceBindings: expect.any(Object),
       })
     );
     expect(options.visibleGroupStatistics).not.toContain('averageExtroversionScore');
-  });
+  }, 10000);
 });

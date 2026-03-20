@@ -1,7 +1,9 @@
 import jsPDF from 'jspdf';
 import type {
+  FaceFeatureBindings,
   FaceFeature,
   FaceFeatureRanges,
+  FaceMetricRanges,
   GroupingTask,
   Student,
   VisibleGroupStatistic,
@@ -18,10 +20,14 @@ import {
   renderStudentRadar,
 } from './chartExport';
 import { addIndentedParagraph } from './pdfText';
-import { NOTO_SANS_SC_BOLD, NOTO_SANS_SC_REGULAR } from './fonts/notoSansSC';
-import { computeFaceMetrics, deriveFaceParameters, getGenderColor } from './faceUtils';
+import {
+  computeFaceMetricRanges,
+  deriveFaceParameters,
+  getGenderColor,
+  shouldRenderFaceCue,
+} from './faceUtils';
 import { computeGlobalGroupMaps, collectUniqueStudentsFromTasks } from './groupingExportUtils';
-import { DEFAULT_FACE_RANGES } from './faceConfig';
+import { DEFAULT_FACE_BINDINGS, DEFAULT_FACE_RANGES, FACE_FEATURES } from './faceConfig';
 import {
   DEFAULT_VISIBLE_GROUP_STATISTICS,
   getVisibleGroupStatisticItems,
@@ -34,7 +40,8 @@ const FONT_SIZE_TEXT = 11;
 const LINE_HEIGHT = 6;
 const PAGE_MARGIN = 20;
 
-function ensureFonts(pdf: jsPDF) {
+async function ensureFonts(pdf: jsPDF) {
+  const { NOTO_SANS_SC_BOLD, NOTO_SANS_SC_REGULAR } = await import('./fonts/notoSansSC');
   pdf.addFileToVFS('NotoSansSC-Regular.ttf', NOTO_SANS_SC_REGULAR);
   pdf.addFont('NotoSansSC-Regular.ttf', FONT_FAMILY, 'normal');
   pdf.addFileToVFS('NotoSansSC-Bold.ttf', NOTO_SANS_SC_BOLD);
@@ -129,9 +136,9 @@ function formatOrientationDescriptor(
 
 interface FaceRenderOptions {
   includeFaces: boolean;
-  features: Record<FaceFeature, boolean>;
+  bindings: FaceFeatureBindings;
   ranges: FaceFeatureRanges;
-  rankingRange: { min: number; max: number } | null;
+  metricRanges: FaceMetricRanges;
 }
 
 async function addGroupSection(
@@ -243,12 +250,12 @@ async function addGroupSection(
     let gridY = y;
 
     const drawFace = (member: Student, centerX: number, centerY: number) => {
-      const ratios = computeFaceMetrics(member, faceOptions.rankingRange);
       const params = deriveFaceParameters(
         faceSize,
-        ratios,
-        faceOptions.features,
-        faceOptions.ranges
+        member,
+        faceOptions.bindings,
+        faceOptions.ranges,
+        faceOptions.metricRanges
       );
       const faceColor = getGenderColor(member.gender);
 
@@ -261,49 +268,63 @@ async function addGroupSection(
       const rightEyeX = centerX + params.eyeSpacing;
       const eyeY = centerY - params.faceRadius * 0.25;
       const browY = eyeY - params.eyeRadius * 1.5;
+      const showEyes = shouldRenderFaceCue(faceOptions.bindings, 'eyes');
+      const showEyebrows = shouldRenderFaceCue(faceOptions.bindings, 'eyebrows');
+      const showNose = shouldRenderFaceCue(faceOptions.bindings, 'nose');
+      const showMouth = shouldRenderFaceCue(faceOptions.bindings, 'mouth');
 
-      pdf.setFillColor(89, 89, 89);
-      pdf.ellipse(leftEyeX, eyeY, params.eyeRadius, params.eyeRadius * 0.85, 'F');
-      pdf.ellipse(rightEyeX, eyeY, params.eyeRadius, params.eyeRadius * 0.85, 'F');
+      if (showEyes) {
+        pdf.setFillColor(89, 89, 89);
+        pdf.ellipse(leftEyeX, eyeY, params.eyeRadius, params.eyeRadius * 0.85, 'F');
+        pdf.ellipse(rightEyeX, eyeY, params.eyeRadius, params.eyeRadius * 0.85, 'F');
+      }
 
-      pdf.setDrawColor(faceColor);
-      pdf.setLineWidth(0.4);
-      pdf.line(
-        leftEyeX - params.eyeRadius,
-        browY - params.browTilt,
-        leftEyeX + params.eyeRadius,
-        browY + params.browTilt
-      );
-      pdf.line(
-        rightEyeX - params.eyeRadius,
-        browY + params.browTilt,
-        rightEyeX + params.eyeRadius,
-        browY - params.browTilt
-      );
+      if (showEyebrows) {
+        pdf.setDrawColor(faceColor);
+        pdf.setLineWidth(0.4);
+        pdf.line(
+          leftEyeX - params.eyeRadius,
+          browY - params.browTilt,
+          leftEyeX + params.eyeRadius,
+          browY + params.browTilt
+        );
+        pdf.line(
+          rightEyeX - params.eyeRadius,
+          browY + params.browTilt,
+          rightEyeX + params.eyeRadius,
+          browY - params.browTilt
+        );
+      }
 
-      pdf.setDrawColor(89, 89, 89);
-      pdf.setLineWidth(0.35);
       const noseTopY = centerY - params.faceRadius * 0.05;
       const noseBottomY = noseTopY + params.noseLength;
-      pdf.line(centerX, noseTopY, centerX, noseBottomY);
+      if (showNose) {
+        pdf.setDrawColor(89, 89, 89);
+        pdf.setLineWidth(0.35);
+        pdf.line(centerX, noseTopY, centerX, noseBottomY);
+      }
 
-      pdf.setDrawColor(faceColor);
-      pdf.setLineWidth(0.6);
       const mouthY = centerY + params.faceRadius * 0.38;
       const mouthLeftX = centerX - params.mouthWidth;
       const mouthRightX = centerX + params.mouthWidth;
       const mouthControlY = mouthY + params.mouthCurve;
 
-      let previousX = mouthLeftX;
-      let previousY = mouthY;
-      const segments = 8;
-      for (let step = 1; step <= segments; step += 1) {
-        const t = step / segments;
-        const x = mouthLeftX + (mouthRightX - mouthLeftX) * t;
-        const yVal = (1 - t) * (1 - t) * mouthY + 2 * (1 - t) * t * mouthControlY + t * t * mouthY;
-        pdf.line(previousX, previousY, x, yVal);
-        previousX = x;
-        previousY = yVal;
+      if (showMouth) {
+        pdf.setDrawColor(faceColor);
+        pdf.setLineWidth(0.6);
+
+        let previousX = mouthLeftX;
+        let previousY = mouthY;
+        const segments = 8;
+        for (let step = 1; step <= segments; step += 1) {
+          const t = step / segments;
+          const x = mouthLeftX + (mouthRightX - mouthLeftX) * t;
+          const yVal =
+            (1 - t) * (1 - t) * mouthY + 2 * (1 - t) * t * mouthControlY + t * t * mouthY;
+          pdf.line(previousX, previousY, x, yVal);
+          previousX = x;
+          previousY = yVal;
+        }
       }
     };
 
@@ -406,9 +427,8 @@ export async function generateClassAnalysisReport(
   tasks: GroupingTask[],
   options?: {
     includeFaces?: boolean;
-    faceFeatures?: Record<FaceFeature, boolean>;
+    faceBindings?: FaceFeatureBindings;
     faceRanges?: FaceFeatureRanges;
-    rankingRange?: { min: number; max: number } | null;
     visibleGroupStatistics?: VisibleGroupStatistic[];
   }
 ): Promise<void> {
@@ -432,27 +452,24 @@ export async function generateClassAnalysisReport(
     });
   }
 
-  const defaultFaceFeatures: Record<FaceFeature, boolean> = {
-    faceSize: true,
-    mouth: true,
-    nose: true,
-    eyes: true,
-    eyeSpacing: true,
-    eyebrows: true,
-  };
-  const faceFeatures = options?.faceFeatures ?? defaultFaceFeatures;
+  const faceBindings: FaceFeatureBindings = { ...DEFAULT_FACE_BINDINGS };
+  if (options?.faceBindings) {
+    FACE_FEATURES.forEach((feature) => {
+      faceBindings[feature] = options.faceBindings![feature];
+    });
+  }
 
   const faceOptions: FaceRenderOptions = {
     includeFaces: Boolean(options?.includeFaces),
-    features: faceFeatures,
+    bindings: faceBindings,
     ranges: faceRanges,
-    rankingRange: options?.rankingRange ?? computeRankingRange(allStudents),
+    metricRanges: computeFaceMetricRanges(allStudents),
   };
   const visibleGroupStatistics =
     options?.visibleGroupStatistics ?? DEFAULT_VISIBLE_GROUP_STATISTICS;
 
   const pdf = new jsPDF('p', 'mm', 'a4');
-  ensureFonts(pdf);
+  await ensureFonts(pdf);
   pdf.setFont(FONT_FAMILY, 'bold');
   pdf.setFontSize(FONT_SIZE_TITLE);
 
@@ -633,21 +650,6 @@ const buildDimensionDataForStudent = (student: Student): DimensionSummary[] =>
     diff: student.learningStyles[descriptor.diffKey],
   }));
 
-const computeRankingRange = (students: Student[]): { min: number; max: number } | null => {
-  const rankings = students
-    .map((student) => student.rankingPercent)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-  if (rankings.length === 0) {
-    return null;
-  }
-  const min = Math.min(...rankings);
-  const max = Math.max(...rankings);
-  if (Math.abs(max - min) < Number.EPSILON) {
-    return null;
-  }
-  return { min, max };
-};
-
 const drawLearningStyleChart = (
   pdf: jsPDF,
   y: number,
@@ -717,7 +719,7 @@ export async function generateIndividualReport(
   groupNumber: number
 ): Promise<Blob> {
   const pdf = new jsPDF('p', 'mm', 'a4');
-  ensureFonts(pdf);
+  await ensureFonts(pdf);
   let y = PAGE_MARGIN;
 
   pdf.setFont(FONT_FAMILY, 'bold');
