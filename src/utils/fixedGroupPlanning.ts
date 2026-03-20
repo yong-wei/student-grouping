@@ -38,21 +38,6 @@ export function buildFixedGroupContext(students: Student[]): FixedGroupContext {
   };
 }
 
-function getContiguousFixedGroupEnd(
-  startGroupNumber: number,
-  fixedGroupMap: Map<number, Student[]>
-) {
-  let endGroupNumber = startGroupNumber - 1;
-  let currentGroupNumber = startGroupNumber;
-
-  while (fixedGroupMap.has(currentGroupNumber)) {
-    endGroupNumber = currentGroupNumber;
-    currentGroupNumber += 1;
-  }
-
-  return endGroupNumber;
-}
-
 export function resolveSeededTaskPlan(args: {
   fixedGroupMap: Map<number, Student[]>;
   selectedStudents: Student[];
@@ -70,10 +55,12 @@ export function resolveSeededTaskPlan(args: {
   const participantMap = new Map(selectedStudents.map((student) => [student.id, student]));
   const selectedGroupCount =
     participantMap.size > 0 ? Math.max(1, Math.ceil(participantMap.size / groupSize)) : 0;
-  let endGroupNumber = Math.max(
-    startGroupNumber + selectedGroupCount - 1,
-    getContiguousFixedGroupEnd(startGroupNumber, fixedGroupMap)
-  );
+  let endGroupNumber =
+    selectedGroupCount > 0 ? startGroupNumber + selectedGroupCount - 1 : startGroupNumber - 1;
+
+  if (fixedGroupMap.has(startGroupNumber)) {
+    endGroupNumber = Math.max(endGroupNumber, startGroupNumber);
+  }
 
   let adjusted = true;
   while (adjusted) {

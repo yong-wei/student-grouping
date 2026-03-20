@@ -83,4 +83,42 @@ describe('fixedGroupPlanning', () => {
     expect(plan.lockedStudentIds).toEqual(new Set(['1', '3', '4']));
     expect(plan.flexibleStudents.map((student) => student.id)).toEqual(['2', '5', '6']);
   });
+
+  it('keeps one contiguous fixed group per empty task boundary', () => {
+    const students = [
+      createStudent('1', 1),
+      createStudent('2', 1),
+      createStudent('3', 2),
+      createStudent('4', 2),
+    ];
+    const context = buildFixedGroupContext(students);
+
+    const firstTaskPlan = resolveSeededTaskPlan({
+      fixedGroupMap: context.fixedGroupMap,
+      selectedStudents: [],
+      groupSize: 6,
+      startGroupNumber: 1,
+    });
+
+    const secondTaskPlan = resolveSeededTaskPlan({
+      fixedGroupMap: context.fixedGroupMap,
+      selectedStudents: [],
+      groupSize: 6,
+      startGroupNumber: 2,
+    });
+
+    expect(firstTaskPlan.range).toEqual({ start: 1, end: 1 });
+    expect(firstTaskPlan.seedGroups.map((seed) => seed.groupNumber)).toEqual([1]);
+    expect(firstTaskPlan.seedGroups[0].lockedMembers.map((student) => student.id)).toEqual([
+      '1',
+      '2',
+    ]);
+
+    expect(secondTaskPlan.range).toEqual({ start: 2, end: 2 });
+    expect(secondTaskPlan.seedGroups.map((seed) => seed.groupNumber)).toEqual([2]);
+    expect(secondTaskPlan.seedGroups[0].lockedMembers.map((student) => student.id)).toEqual([
+      '3',
+      '4',
+    ]);
+  });
 });
