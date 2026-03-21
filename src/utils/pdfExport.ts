@@ -32,6 +32,7 @@ import {
   DEFAULT_VISIBLE_GROUP_STATISTICS,
   getVisibleGroupStatisticItems,
 } from './groupStatisticDisplay';
+import { loadPdfCompatibleImage } from './imagePdf';
 
 const FONT_FAMILY = 'NotoSansSC';
 const FONT_SIZE_TITLE = 18;
@@ -99,25 +100,6 @@ function ensureSpace(pdf: jsPDF, currentY: number, requiredHeight: number): numb
   }
   pdf.addPage();
   return PAGE_MARGIN;
-}
-
-async function loadImageAsDataURL(src?: string): Promise<string | null> {
-  if (!src) return null;
-  try {
-    const response = await fetch(src);
-    if (!response.ok) {
-      return null;
-    }
-    const blob = await response.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.warn('无法加载图片用于报告导出', error);
-    return null;
-  }
 }
 
 function formatOrientationDescriptor(
@@ -755,19 +737,27 @@ export async function generateIndividualReport(
   const introWrapped = introLines.flatMap((line) => pdf.splitTextToSize(line, infoColumnWidth));
   const introHeight = introWrapped.length * LINE_HEIGHT;
 
-  const photoDataUrl = await loadImageAsDataURL(student.photo);
+  let photoAsset = null;
+  try {
+    photoAsset = await loadPdfCompatibleImage(student.photo, {
+      maxDimension: 1600,
+      jpegQuality: 0.86,
+    });
+  } catch (error) {
+    console.warn('无法加载图片用于报告导出', error);
+  }
+
   let photoHeight = 0;
   let photoWidth = 0;
-  let photoFormat: 'PNG' | 'JPEG' = 'PNG';
-  if (photoDataUrl) {
-    const props = pdf.getImageProperties(photoDataUrl);
-    const ratio = props.width && props.height ? props.width / props.height : 1;
+  let photoFormat: 'PNG' | 'JPEG' = 'JPEG';
+  if (photoAsset) {
+    const ratio = photoAsset.width && photoAsset.height ? photoAsset.width / photoAsset.height : 1;
     const maxPhotoHeight = 50;
     const maxPhotoWidth = photoColumnWidth;
     const heightByWidth = maxPhotoWidth / ratio;
     photoHeight = Math.min(maxPhotoHeight, heightByWidth);
     photoWidth = photoHeight * ratio;
-    photoFormat = photoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+    photoFormat = photoAsset.format;
   }
 
   const blockHeight = Math.max(infoHeight + introHeight, photoHeight) + 6;
@@ -791,10 +781,10 @@ export async function generateIndividualReport(
     infoY += LINE_HEIGHT;
   });
 
-  if (photoDataUrl && photoHeight > 0) {
+  if (photoAsset && photoHeight > 0) {
     const photoX = PAGE_MARGIN + infoColumnWidth + columnGap + (photoColumnWidth - photoWidth) / 2;
     const photoY = y + (blockHeight - 6 - photoHeight) / 2;
-    pdf.addImage(photoDataUrl, photoFormat, photoX, photoY, photoWidth, photoHeight);
+    pdf.addImage(photoAsset.dataUrl, photoFormat, photoX, photoY, photoWidth, photoHeight);
   }
 
   y += blockHeight;

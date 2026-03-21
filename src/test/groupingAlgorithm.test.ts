@@ -208,6 +208,41 @@ describe('Grouping Algorithm', () => {
       expect(firstGroup?.members.some((member) => member.id === mockStudents[0].id)).toBe(true);
     });
 
+    it('should leave fixed-only seed groups unchanged when fillToCapacity is false', () => {
+      const weights: GroupingWeights = {
+        gender: 20,
+        major: 20,
+        initiative: 20,
+        ranking: 10,
+        extroversion: 10,
+        leader: 20,
+        intraStyleDiversity: 10,
+        interStyleSimilarity: 10,
+      };
+      const seedGroups: SeedGroup[] = [
+        {
+          groupNumber: 1,
+          lockedMembers: [mockStudents[0], mockStudents[1]],
+          fillToCapacity: false,
+        },
+        { groupNumber: 2, lockedMembers: [] },
+      ];
+      const freeStudents = mockStudents.slice(2, 6);
+
+      const result = optimizeGrouping(freeStudents, 4, weights, 300, { seedGroups });
+
+      const fixedGroup = result.groups.find((group) => group.groupNumber === 1);
+      const flexibleGroup = result.groups.find((group) => group.groupNumber === 2);
+
+      expect(fixedGroup?.members.map((member) => member.id)).toEqual(['student-1', 'student-2']);
+      expect(flexibleGroup?.members.map((member) => member.id).sort()).toEqual([
+        'student-3',
+        'student-4',
+        'student-5',
+        'student-6',
+      ]);
+    });
+
     it('should ignore missing ranking percent when scoring ranking balance', () => {
       const rankedStudents = mockStudents.slice(0, 12);
       const unrankedStudents = rankedStudents.map((student, index) =>

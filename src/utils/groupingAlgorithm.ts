@@ -9,6 +9,7 @@ import {
 export interface SeedGroup {
   groupNumber: number;
   lockedMembers: Student[];
+  fillToCapacity?: boolean;
 }
 
 export interface GroupingOptions {
@@ -184,8 +185,14 @@ function initializeSeededGroups(
 
   const shuffled = [...freeStudents].sort(() => Math.random() - 0.5);
   let index = 0;
+  const fillableIndices = sortedSeeds
+    .map((seed, seedIndex) => (seed.fillToCapacity === false ? -1 : seedIndex))
+    .filter((seedIndex) => seedIndex !== -1);
 
-  groups.forEach((group) => {
+  groups.forEach((group, groupIndex) => {
+    if (sortedSeeds[groupIndex].fillToCapacity === false) {
+      return;
+    }
     const capacity = Math.max(groupSize - group.members.length, 0);
     for (let i = 0; i < capacity && index < shuffled.length; i += 1) {
       group.members.push(shuffled[index]);
@@ -193,10 +200,12 @@ function initializeSeededGroups(
     }
   });
 
-  while (index < shuffled.length && groups.length > 0) {
-    const group = groups[index % groups.length];
+  let overflowIndex = 0;
+  while (index < shuffled.length && fillableIndices.length > 0) {
+    const group = groups[fillableIndices[overflowIndex % fillableIndices.length]];
     group.members.push(shuffled[index]);
     index += 1;
+    overflowIndex += 1;
   }
 
   groups.forEach((group) => {

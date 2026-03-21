@@ -40,6 +40,7 @@ export interface GroupingTask {
   name: string;
   studentIds: string[]; // 参与分组的学生ID
   groupSize: number; // 小组人数
+  fillFixedGroups: boolean; // 是否补齐固定分组人数
   mode: 'learning-style' | 'balanced-random'; // 分组模式
   weights: GroupingWeights; // 权重配置
   result?: GroupingResult; // 分组结果
@@ -51,6 +52,7 @@ export interface GroupingTaskDraft {
   name: string;
   studentIds: string[];
   groupSize: number;
+  fillFixedGroups: boolean;
   mode: 'learning-style' | 'balanced-random';
   weights: GroupingWeights;
 }

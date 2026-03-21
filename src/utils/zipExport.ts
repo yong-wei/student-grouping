@@ -57,6 +57,7 @@ export async function generateBatchReports(
   // 生成 ZIP 文件
   const zipBlob = await zip.generateAsync({
     type: 'blob',
+    streamFiles: true,
     compression: 'DEFLATE',
     compressionOptions: {
       level: 6,

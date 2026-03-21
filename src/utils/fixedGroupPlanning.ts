@@ -38,6 +38,20 @@ export function buildFixedGroupContext(students: Student[]): FixedGroupContext {
   };
 }
 
+export function isSeedGroupSizeValid(seedGroup: SeedGroup, groupSize: number): boolean {
+  if (seedGroup.fillToCapacity === false) {
+    return true;
+  }
+  return seedGroup.lockedMembers.length <= groupSize;
+}
+
+export function getSeedGroupFlexibleCapacity(seedGroup: SeedGroup, groupSize: number): number {
+  if (seedGroup.fillToCapacity === false) {
+    return 0;
+  }
+  return Math.max(groupSize - seedGroup.lockedMembers.length, 0);
+}
+
 export function resolveSeededTaskPlan(args: {
   fixedGroupMap: Map<number, Student[]>;
   selectedStudents: Student[];
@@ -116,6 +130,86 @@ export function resolveSeededTaskPlan(args: {
     participantIds: participantStudents.map((student) => student.id),
     participantStudents,
     flexibleStudents: participantStudents.filter((student) => !lockedStudentIds.has(student.id)),
+    lockedStudentIds,
+    seedGroups,
+    range: { start: startGroupNumber, end: endGroupNumber },
+  };
+}
+
+export function resolveFixedGroupsAsIsTaskPlan(args: {
+  fixedGroupMap: Map<number, Student[]>;
+  selectedStudents: Student[];
+  groupSize: number;
+  startGroupNumber: number;
+}): {
+  participantIds: string[];
+  participantStudents: Student[];
+  flexibleStudents: Student[];
+  lockedStudentIds: Set<string>;
+  seedGroups: SeedGroup[];
+  range: { start: number; end: number };
+} {
+  const { fixedGroupMap, selectedStudents, groupSize, startGroupNumber } = args;
+  const fixedStudentIds = new Set(
+    Array.from(fixedGroupMap.values()).flatMap((members) => members.map((student) => student.id))
+  );
+  const flexibleStudents = selectedStudents.filter((student) => !fixedStudentIds.has(student.id));
+  const participantMap = new Map(flexibleStudents.map((student) => [student.id, student]));
+  const lockedStudentIds = new Set<string>();
+  const flexibleGroupCount =
+    flexibleStudents.length > 0 ? Math.max(1, Math.ceil(flexibleStudents.length / groupSize)) : 0;
+  const seedGroups: SeedGroup[] = [];
+  let endGroupNumber = startGroupNumber - 1;
+
+  if (flexibleGroupCount === 0) {
+    const lockedMembers = fixedGroupMap.get(startGroupNumber) ?? [];
+    if (lockedMembers.length > 0) {
+      seedGroups.push({
+        groupNumber: startGroupNumber,
+        lockedMembers,
+        fillToCapacity: false,
+      });
+      lockedMembers.forEach((student) => {
+        participantMap.set(student.id, student);
+        lockedStudentIds.add(student.id);
+      });
+      endGroupNumber = startGroupNumber;
+    }
+  } else {
+    let flexibleSlots = 0;
+    let currentGroupNumber = startGroupNumber;
+
+    while (flexibleSlots < flexibleGroupCount) {
+      const lockedMembers = fixedGroupMap.get(currentGroupNumber) ?? [];
+      if (lockedMembers.length > 0) {
+        seedGroups.push({
+          groupNumber: currentGroupNumber,
+          lockedMembers,
+          fillToCapacity: false,
+        });
+        lockedMembers.forEach((student) => {
+          participantMap.set(student.id, student);
+          lockedStudentIds.add(student.id);
+        });
+      } else {
+        seedGroups.push({
+          groupNumber: currentGroupNumber,
+          lockedMembers: [],
+        });
+        flexibleSlots += 1;
+      }
+
+      endGroupNumber = currentGroupNumber;
+      currentGroupNumber += 1;
+    }
+  }
+
+  const participantStudents = Array.from(participantMap.values());
+
+  return {
+    participantIds: participantStudents.map((student) => student.id),
+    participantStudents,
+    flexibleStudents,
     lockedStudentIds,
     seedGroups,
     range: { start: startGroupNumber, end: endGroupNumber },
